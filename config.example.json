@@ -1,0 +1,33 @@
+{
+  "trackedTraders": [
+    "0x1234567890123456789012345678901234567890",
+    "0x0987654321098765432109876543210987654321"
+  ],
+  "riskParams": {
+    "minTradeSize": 100,
+    "maxCapitalPerTrade": 0.05,
+    "maxSlippage": 0.05,
+    "maxPositions": 10,
+    "maxMarketExposure": 0.20
+  },
+  "execution": {
+    "mode": "paper",
+    "pollInterval": 15000,
+    "retryAttempts": 3,
+    "retryDelayMs": 1000
+  },
+  "polymarket": {
+    "clobApiUrl": "https://clob.polymarket.com",
+    "chainId": 137,
+    "feeRateBps": 200
+  },
+  "database": {
+    "path": "./data/bot.db"
+  },
+  "logging": {
+    "level": "info",
+    "directory": "./logs",
+    "maxFiles": 10,
+    "maxSize": "20m"
+  }
+}
