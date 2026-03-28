@@ -14,9 +14,6 @@ dist/
 .env.local
 .env.*.local
 
-# Configuration (contains sensitive data)
-config.json
-
 # Database
 *.db
 *.sqlite
