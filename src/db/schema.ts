@@ -9,9 +9,15 @@ export class DatabaseManager {
   private pool: Pool;
 
   private constructor(databaseUrl: string) {
+    // Detect if we need SSL (cloud databases like Render require it)
+    const requiresSsl = databaseUrl.includes('render.com') || 
+                       databaseUrl.includes('amazonaws.com') ||
+                       databaseUrl.includes('supabase.co') ||
+                       process.env.NODE_ENV === 'production';
+
     this.pool = new Pool({
       connectionString: databaseUrl,
-      ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+      ssl: requiresSsl ? { rejectUnauthorized: false } : false,
       max: 20,
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 2000,
