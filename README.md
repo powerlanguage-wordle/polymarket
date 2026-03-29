@@ -330,6 +330,20 @@ npm run dev
 
 The Vite dev server will start on port 3000 and proxy API requests to the bot on port 3001.
 
+**Optional**: Override the API URL with an environment variable:
+```bash
+# dashboard/.env
+VITE_API_URL=http://localhost:3001/api
+```
+
+### Deployment
+
+The dashboard is built as static files and served by the bot. API calls use relative URLs (`/api/*`), so it works automatically in any deployment environment:
+
+1. Build the dashboard: `npm run build:dashboard`
+2. The bot serves the dashboard from `dashboard/dist`
+3. All API calls go to the same origin (no CORS issues)
+
 ## ⚠️ Safety & Risk Management
 
 ### Paper Trading First

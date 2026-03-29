@@ -1,4 +1,7 @@
-const API_BASE_URL = 'http://localhost:3001/api';
+// Use relative URL to work in both development and production
+// In development: proxied by Vite dev server
+// In production: served from the same origin as the bot
+const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
 export interface PortfolioStats {
   totalPositions: number;
