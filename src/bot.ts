@@ -12,6 +12,7 @@ import { PolymarketClient } from './execution/PolymarketClient';
 import { PositionManager } from './positions/PositionManager';
 import { TradeLogger } from './positions/TradeLogger';
 import { HealthChecker } from './monitoring/HealthChecker';
+import { StatsServer } from './api/StatsServer';
 import type { Trade } from './types';
 
 const logger = createLogger('Bot');
@@ -24,6 +25,7 @@ class PolymarketCopyBot {
   private positionManager!: PositionManager;
   private tradeLogger!: TradeLogger;
   private healthChecker!: HealthChecker;
+  private statsServer!: StatsServer;
   private db!: Awaited<ReturnType<typeof createDatabase>>;
   private isShuttingDown = false;
   private initialized = false;
@@ -53,6 +55,7 @@ class PolymarketCopyBot {
     this.positionManager = new PositionManager(this.db);
     this.tradeLogger = new TradeLogger(this.db);
     this.healthChecker = new HealthChecker();
+    this.statsServer = new StatsServer(this.db, this.riskManager.getCapitalCalculator());
 
     if (config.execution.mode === 'paper') {
       this.trader = new PaperTrader(this.db);
@@ -194,6 +197,7 @@ class PolymarketCopyBot {
       logger.info(`Received ${signal}, shutting down gracefully...`);
 
       this.tradeMonitor.stop();
+      await this.statsServer.stop();
 
       await new Promise((resolve) => setTimeout(resolve, 1000));
 
@@ -229,6 +233,7 @@ class PolymarketCopyBot {
       logger.info('Starting bot...');
 
       await this.initialize();
+      await this.statsServer.start();
       await this.tradeMonitor.start();
 
       setInterval(async () => {

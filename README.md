@@ -130,23 +130,14 @@ npm run setup  # Generates API credentials
 
 ### Development Mode (with auto-restart)
 ```bash
-# Terminal 1 - Bot
-npm run dev:bot
-
-# Terminal 2 - Dashboard Server
-npm run dev:server
+npm run dev
 ```
 
 ### Build and Run Production
 ```bash
 npm run build
 npm run build:dashboard
-
-# Terminal 1 - Bot
-npm run start:bot
-
-# Terminal 2 - Dashboard Server
-npm run start:server
+npm start
 ```
 
 ### Paper Trading (Recommended First)
@@ -242,7 +233,7 @@ polymarket/
 │   │   ├── api/
 │   │   │   └── client.ts        # API client
 │   │   └── components/          # React components
-│   └── dist/                    # Built static files (served by dashboard server)
+│   └── dist/                    # Built static files (served by bot)
 ├── test/                        # Jest tests
 ├── logs/                        # Log files
 └── config.json                  # Bot configuration
@@ -278,8 +269,16 @@ The bot uses PostgreSQL with the following tables:
 - `logs/bot.log` - All events (info, warn, error)
 - `logs/error.log` - Errors only
 
-### Health Checks
-The bot monitors:
+### Health Check Endpoint
+
+**Dashboard/Bot Health Check** (http://localhost:3001):
+```bash
+curl http://localhost:3001/api/health
+```
+Returns `{"status": "ok", "timestamp": 1711699764000}`
+
+### Health Monitoring
+The bot automatically monitors:
 - Trade detection activity
 - API connectivity
 - Memory usage

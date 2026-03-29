@@ -56,34 +56,18 @@ npm run build
 npm run build:dashboard
 ```
 
-## Step 5: Run the Bot and Dashboard
+## Step 5: Run the Bot (includes Dashboard)
 
-The bot and dashboard run as **separate processes**. You'll need to run both:
+The bot includes the dashboard server - everything runs in a single process:
 
-### Option 1: Development Mode (Recommended for Testing)
-Open two terminal windows:
-
-**Terminal 1 - Bot:**
+### Development Mode (Recommended for Testing)
 ```bash
-npm run dev:bot
+npm run dev
 ```
 
-**Terminal 2 - Dashboard Server:**
+### Production Mode
 ```bash
-npm run dev:server
-```
-
-### Option 2: Production Mode
-Open two terminal windows:
-
-**Terminal 1 - Bot:**
-```bash
-npm run start:bot
-```
-
-**Terminal 2 - Dashboard Server:**
-```bash
-npm run start:server
+npm start
 ```
 
 The dashboard will be available at: http://localhost:3001
@@ -106,7 +90,7 @@ tail -f logs/bot.log
 1. Make sure you've run `npm run setup` to generate API credentials
 2. Edit `config.json` and set `"mode": "live"`
 3. Start with small capital allocation
-4. Start both the bot and dashboard server (see Step 5)
+4. Start the bot (see Step 5)
 5. Monitor closely!
 
 ## Common Commands
@@ -124,19 +108,10 @@ npm run build
 # Build dashboard
 npm run build:dashboard
 
-# Development mode - Bot only
-npm run dev:bot
+# Development mode (bot + dashboard)
+npm run dev
 
-# Development mode - Dashboard server only
-npm run dev:server
-
-# Production mode - Bot only
-npm run start:bot
-
-# Production mode - Dashboard server only
-npm run start:server
-
-# Legacy command (runs bot only, for backward compatibility)
+# Production mode (bot + dashboard)
 npm start
 
 # Lint code
