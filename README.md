@@ -4,7 +4,7 @@ A production-ready automated trading bot that monitors selected Polymarket trade
 
 ## 🚀 Features
 
-- **Real-time Trade Monitoring** - Polls Polymarket CLOB API every 10-30 seconds for trader activity
+- **Real-time Trade Monitoring** - WebSocket integration for instant trade detection with polling fallback
 - **Web Dashboard** - Built-in UI for viewing portfolio stats, positions, and PnL in real-time
 - **Multi-stage Validation** - Whitelist, size threshold, liquidity, and slippage checks
 - **Smart Risk Management** - 2-5% capital per trade, max exposure limits, position sizing
@@ -80,9 +80,16 @@ Polymarket uses a two-level authentication system. You need to derive API creden
   },
   "execution": {
     "mode": "paper",               // "paper" or "live"
-    "pollInterval": 15000,         // Poll every 15 seconds
+    "pollInterval": 15000,         // Poll every 15 seconds (used as fallback)
     "retryAttempts": 3,
-    "retryDelayMs": 1000
+    "retryDelayMs": 1000,
+    "useWebSocket": true           // Use WebSocket for real-time updates (recommended)
+  },
+  "polymarket": {
+    "clobApiUrl": "https://clob.polymarket.com",
+    "chainId": 137,
+    "feeRateBps": 200,
+    "wsUrl": "wss://ws-subscriptions-clob.polymarket.com/trades"
   }
 }
 ```

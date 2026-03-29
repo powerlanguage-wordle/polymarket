@@ -1,6 +1,6 @@
 {
   "trackedTraders": [
-    "0xde17f7144fbd0eddb2679132c10ff5e74b120988"
+    "0x9d84ce0306f8551e02efef1680475fc0f1dc1344"
   ],
   "riskParams": {
     "minTradeSize": 100,
@@ -13,12 +13,14 @@
     "mode": "paper",
     "pollInterval": 15000,
     "retryAttempts": 3,
-    "retryDelayMs": 1000
+    "retryDelayMs": 1000,
+    "useWebSocket": true
   },
   "polymarket": {
     "clobApiUrl": "https://clob.polymarket.com",
     "chainId": 137,
-    "feeRateBps": 200
+    "feeRateBps": 200,
+    "wsUrl": "wss://ws-subscriptions-clob.polymarket.com/trades"
   },
   "logging": {
     "level": "info",
