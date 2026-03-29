@@ -11,9 +11,9 @@ export class TradeLogger {
     this.db = db;
   }
 
-  logTrade(trade: Trade): void {
+  async logTrade(trade: Trade): Promise<void> {
     try {
-      this.db.saveTrade(trade);
+      await this.db.saveTrade(trade);
       logger.debug('Trade logged', { tradeId: trade.id });
     } catch (error) {
       logger.error('Failed to log trade', {
@@ -23,9 +23,9 @@ export class TradeLogger {
     }
   }
 
-  logCopyDecision(trade: Trade, validation: ValidationResult): void {
+  async logCopyDecision(trade: Trade, validation: ValidationResult): Promise<void> {
     try {
-      this.db.saveCopyDecision(
+      await this.db.saveCopyDecision(
         trade.id,
         validation.shouldCopy,
         validation.reason,
@@ -44,9 +44,9 @@ export class TradeLogger {
     }
   }
 
-  logExecution(trade: Trade, result: ExecutionResult): void {
+  async logExecution(trade: Trade, result: ExecutionResult): Promise<void> {
     try {
-      this.db.saveExecutionLog(
+      await this.db.saveExecutionLog(
         trade.id,
         result.success,
         result.positionId,
@@ -68,9 +68,9 @@ export class TradeLogger {
     }
   }
 
-  markProcessed(tradeId: string): void {
+  async markProcessed(tradeId: string): Promise<void> {
     try {
-      this.db.markTradeProcessed(tradeId);
+      await this.db.markTradeProcessed(tradeId);
       logger.debug('Trade marked as processed', { tradeId });
     } catch (error) {
       logger.error('Failed to mark trade as processed', {

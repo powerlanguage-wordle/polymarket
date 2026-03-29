@@ -15,8 +15,8 @@ export class CapitalCalculator {
     this.totalCapital = totalCapital;
   }
 
-  calculateAvailableCapital(): number {
-    const openPositions = this.db.getOpenPositions();
+  async calculateAvailableCapital(): Promise<number> {
+    const openPositions = await this.db.getOpenPositions();
     const allocatedCapital = openPositions.reduce((sum, pos) => {
       return sum + pos.size * pos.entryPrice;
     }, 0);
@@ -32,8 +32,8 @@ export class CapitalCalculator {
     return Math.max(0, availableCapital);
   }
 
-  calculateAllocationForTrade(): number {
-    const availableCapital = this.calculateAvailableCapital();
+  async calculateAllocationForTrade(): Promise<number> {
+    const availableCapital = await this.calculateAvailableCapital();
     const maxAllocation = this.totalCapital * this.config.riskParams.maxCapitalPerTrade;
 
     const allocation = Math.min(availableCapital, maxAllocation);

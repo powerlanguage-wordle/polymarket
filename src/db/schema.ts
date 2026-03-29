@@ -1,6 +1,4 @@
-import Database from 'better-sqlite3';
-import path from 'path';
-import fs from 'fs';
+import { Pool } from 'pg';
 import { createLogger } from '../utils/logger';
 import type { Trade, Position } from '../types';
 
@@ -8,234 +6,244 @@ const logger = createLogger('Database');
 
 export class DatabaseManager {
   private static instance: DatabaseManager;
-  private db: Database.Database;
+  private pool: Pool;
 
-  private constructor(dbPath: string) {
-    const dir = path.dirname(dbPath);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
+  private constructor(databaseUrl: string) {
+    this.pool = new Pool({
+      connectionString: databaseUrl,
+      ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+      max: 20,
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 2000,
+    });
 
-    this.db = new Database(dbPath);
-    this.db.pragma('journal_mode = WAL');
-    this.initialize();
+    this.pool.on('error', (err) => {
+      logger.error('Unexpected error on idle client', { error: err.message });
+    });
   }
 
-  static getInstance(dbPath = './data/bot.db'): DatabaseManager {
+  static async getInstance(databaseUrl: string): Promise<DatabaseManager> {
     if (!DatabaseManager.instance) {
-      DatabaseManager.instance = new DatabaseManager(dbPath);
+      DatabaseManager.instance = new DatabaseManager(databaseUrl);
+      await DatabaseManager.instance.initialize();
     }
     return DatabaseManager.instance;
   }
 
-  private initialize(): void {
+  private async initialize(): Promise<void> {
     logger.info('Initializing database schema...');
 
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS trades (
-        id TEXT PRIMARY KEY,
-        trader TEXT NOT NULL,
-        market TEXT NOT NULL,
-        market_name TEXT,
-        outcome TEXT NOT NULL,
-        side TEXT NOT NULL CHECK(side IN ('BUY', 'SELL')),
-        price REAL NOT NULL,
-        size REAL NOT NULL,
-        timestamp INTEGER NOT NULL,
-        transaction_hash TEXT,
-        processed INTEGER DEFAULT 0,
-        created_at INTEGER DEFAULT (unixepoch())
-      );
+    const client = await this.pool.connect();
+    try {
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS trades (
+          id TEXT PRIMARY KEY,
+          trader TEXT NOT NULL,
+          market TEXT NOT NULL,
+          market_name TEXT,
+          outcome TEXT NOT NULL,
+          side TEXT NOT NULL CHECK(side IN ('BUY', 'SELL')),
+          price DOUBLE PRECISION NOT NULL,
+          size DOUBLE PRECISION NOT NULL,
+          timestamp BIGINT NOT NULL,
+          transaction_hash TEXT,
+          processed BOOLEAN DEFAULT FALSE,
+          created_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT
+        );
 
-      CREATE INDEX IF NOT EXISTS idx_trades_trader ON trades(trader);
-      CREATE INDEX IF NOT EXISTS idx_trades_market ON trades(market);
-      CREATE INDEX IF NOT EXISTS idx_trades_timestamp ON trades(timestamp);
-      CREATE INDEX IF NOT EXISTS idx_trades_processed ON trades(processed);
+        CREATE INDEX IF NOT EXISTS idx_trades_trader ON trades(trader);
+        CREATE INDEX IF NOT EXISTS idx_trades_market ON trades(market);
+        CREATE INDEX IF NOT EXISTS idx_trades_timestamp ON trades(timestamp);
+        CREATE INDEX IF NOT EXISTS idx_trades_processed ON trades(processed);
 
-      CREATE TABLE IF NOT EXISTS positions (
-        id TEXT PRIMARY KEY,
-        market TEXT NOT NULL,
-        outcome TEXT NOT NULL,
-        side TEXT NOT NULL CHECK(side IN ('BUY', 'SELL')),
-        size REAL NOT NULL,
-        entry_price REAL NOT NULL,
-        current_price REAL,
-        pnl REAL,
-        status TEXT NOT NULL CHECK(status IN ('open', 'closed')),
-        opened_at INTEGER NOT NULL,
-        closed_at INTEGER,
-        original_trader TEXT,
-        created_at INTEGER DEFAULT (unixepoch()),
-        updated_at INTEGER DEFAULT (unixepoch())
-      );
+        CREATE TABLE IF NOT EXISTS positions (
+          id TEXT PRIMARY KEY,
+          market TEXT NOT NULL,
+          outcome TEXT NOT NULL,
+          side TEXT NOT NULL CHECK(side IN ('BUY', 'SELL')),
+          size DOUBLE PRECISION NOT NULL,
+          entry_price DOUBLE PRECISION NOT NULL,
+          current_price DOUBLE PRECISION,
+          pnl DOUBLE PRECISION,
+          status TEXT NOT NULL CHECK(status IN ('open', 'closed')),
+          opened_at BIGINT NOT NULL,
+          closed_at BIGINT,
+          original_trader TEXT,
+          created_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT,
+          updated_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT
+        );
 
-      CREATE INDEX IF NOT EXISTS idx_positions_market ON positions(market);
-      CREATE INDEX IF NOT EXISTS idx_positions_status ON positions(status);
-      CREATE INDEX IF NOT EXISTS idx_positions_opened_at ON positions(opened_at);
+        CREATE INDEX IF NOT EXISTS idx_positions_market ON positions(market);
+        CREATE INDEX IF NOT EXISTS idx_positions_status ON positions(status);
+        CREATE INDEX IF NOT EXISTS idx_positions_opened_at ON positions(opened_at);
 
-      CREATE TABLE IF NOT EXISTS copy_decisions (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        trade_id TEXT NOT NULL,
-        should_copy INTEGER NOT NULL,
-        reason TEXT,
-        trader_whitelisted INTEGER,
-        size_threshold INTEGER,
-        liquidity_ok INTEGER,
-        slippage_ok INTEGER,
-        risk_limits_ok INTEGER,
-        timestamp INTEGER DEFAULT (unixepoch()),
-        FOREIGN KEY (trade_id) REFERENCES trades(id)
-      );
+        CREATE TABLE IF NOT EXISTS copy_decisions (
+          id SERIAL PRIMARY KEY,
+          trade_id TEXT NOT NULL,
+          should_copy BOOLEAN NOT NULL,
+          reason TEXT,
+          trader_whitelisted BOOLEAN,
+          size_threshold BOOLEAN,
+          liquidity_ok BOOLEAN,
+          slippage_ok BOOLEAN,
+          risk_limits_ok BOOLEAN,
+          timestamp BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT
+        );
 
-      CREATE INDEX IF NOT EXISTS idx_copy_decisions_trade_id ON copy_decisions(trade_id);
-      CREATE INDEX IF NOT EXISTS idx_copy_decisions_timestamp ON copy_decisions(timestamp);
+        CREATE INDEX IF NOT EXISTS idx_copy_decisions_trade_id ON copy_decisions(trade_id);
+        CREATE INDEX IF NOT EXISTS idx_copy_decisions_timestamp ON copy_decisions(timestamp);
 
-      CREATE TABLE IF NOT EXISTS execution_log (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        trade_id TEXT NOT NULL,
-        position_id TEXT,
-        success INTEGER NOT NULL,
-        order_id TEXT,
-        executed_price REAL,
-        executed_size REAL,
-        error TEXT,
-        timestamp INTEGER NOT NULL,
-        FOREIGN KEY (trade_id) REFERENCES trades(id),
-        FOREIGN KEY (position_id) REFERENCES positions(id)
-      );
+        CREATE TABLE IF NOT EXISTS execution_log (
+          id SERIAL PRIMARY KEY,
+          trade_id TEXT NOT NULL,
+          position_id TEXT,
+          success BOOLEAN NOT NULL,
+          order_id TEXT,
+          executed_price DOUBLE PRECISION,
+          executed_size DOUBLE PRECISION,
+          error TEXT,
+          timestamp BIGINT NOT NULL
+        );
 
-      CREATE INDEX IF NOT EXISTS idx_execution_log_trade_id ON execution_log(trade_id);
-      CREATE INDEX IF NOT EXISTS idx_execution_log_timestamp ON execution_log(timestamp);
-    `);
+        CREATE INDEX IF NOT EXISTS idx_execution_log_trade_id ON execution_log(trade_id);
+        CREATE INDEX IF NOT EXISTS idx_execution_log_timestamp ON execution_log(timestamp);
+      `);
 
-    logger.info('Database schema initialized successfully');
+      logger.info('Database schema initialized successfully');
+    } finally {
+      client.release();
+    }
   }
 
-  saveTrade(trade: Trade): void {
-    const stmt = this.db.prepare(`
-      INSERT OR IGNORE INTO trades (
+  async saveTrade(trade: Trade): Promise<void> {
+    await this.pool.query(
+      `INSERT INTO trades (
         id, trader, market, market_name, outcome, side, price, size, timestamp, transaction_hash
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-
-    stmt.run(
-      trade.id,
-      trade.trader.toLowerCase(),
-      trade.market,
-      trade.marketName,
-      trade.outcome,
-      trade.side,
-      trade.price,
-      trade.size,
-      trade.timestamp,
-      trade.transactionHash
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      ON CONFLICT (id) DO NOTHING`,
+      [
+        trade.id,
+        trade.trader.toLowerCase(),
+        trade.market,
+        trade.marketName,
+        trade.outcome,
+        trade.side,
+        trade.price,
+        trade.size,
+        trade.timestamp,
+        trade.transactionHash,
+      ]
     );
   }
 
-  isTradeProcessed(tradeId: string): boolean {
-    const stmt = this.db.prepare('SELECT processed FROM trades WHERE id = ?');
-    const result = stmt.get(tradeId) as { processed: number } | undefined;
-    return result?.processed === 1;
+  async isTradeProcessed(tradeId: string): Promise<boolean> {
+    const result = await this.pool.query<{ processed: boolean }>(
+      'SELECT processed FROM trades WHERE id = $1',
+      [tradeId]
+    );
+    return result.rows[0]?.processed === true;
   }
 
-  markTradeProcessed(tradeId: string): void {
-    const stmt = this.db.prepare('UPDATE trades SET processed = 1 WHERE id = ?');
-    stmt.run(tradeId);
+  async markTradeProcessed(tradeId: string): Promise<void> {
+    await this.pool.query('UPDATE trades SET processed = TRUE WHERE id = $1', [tradeId]);
   }
 
-  savePosition(position: Position): void {
-    const stmt = this.db.prepare(`
-      INSERT INTO positions (
+  async savePosition(position: Position): Promise<void> {
+    await this.pool.query(
+      `INSERT INTO positions (
         id, market, outcome, side, size, entry_price, current_price, pnl,
         status, opened_at, closed_at, original_trader
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-
-    stmt.run(
-      position.id,
-      position.market,
-      position.outcome,
-      position.side,
-      position.size,
-      position.entryPrice,
-      position.currentPrice,
-      position.pnl,
-      position.status,
-      position.openedAt,
-      position.closedAt,
-      position.originalTrader
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+      [
+        position.id,
+        position.market,
+        position.outcome,
+        position.side,
+        position.size,
+        position.entryPrice,
+        position.currentPrice,
+        position.pnl,
+        position.status,
+        position.openedAt,
+        position.closedAt,
+        position.originalTrader,
+      ]
     );
   }
 
-  updatePosition(positionId: string, updates: Partial<Position>): void {
+  async updatePosition(positionId: string, updates: Partial<Position>): Promise<void> {
     const fields: string[] = [];
     const values: unknown[] = [];
+    let paramIndex = 1;
 
     if (updates.currentPrice !== undefined) {
-      fields.push('current_price = ?');
+      fields.push(`current_price = $${paramIndex++}`);
       values.push(updates.currentPrice);
     }
     if (updates.pnl !== undefined) {
-      fields.push('pnl = ?');
+      fields.push(`pnl = $${paramIndex++}`);
       values.push(updates.pnl);
     }
     if (updates.status !== undefined) {
-      fields.push('status = ?');
+      fields.push(`status = $${paramIndex++}`);
       values.push(updates.status);
     }
     if (updates.closedAt !== undefined) {
-      fields.push('closed_at = ?');
+      fields.push(`closed_at = $${paramIndex++}`);
       values.push(updates.closedAt);
     }
 
     if (fields.length === 0) return;
 
-    fields.push('updated_at = unixepoch()');
+    fields.push(`updated_at = EXTRACT(EPOCH FROM NOW())::BIGINT`);
     values.push(positionId);
 
-    const stmt = this.db.prepare(`UPDATE positions SET ${fields.join(', ')} WHERE id = ?`);
-    stmt.run(...values);
+    await this.pool.query(
+      `UPDATE positions SET ${fields.join(', ')} WHERE id = $${paramIndex}`,
+      values
+    );
   }
 
-  getOpenPositions(): Position[] {
-    const stmt = this.db.prepare(`
-      SELECT 
-        id, market, outcome, side, size, entry_price as entryPrice,
-        current_price as currentPrice, pnl, status, opened_at as openedAt,
-        closed_at as closedAt, original_trader as originalTrader
+  async getOpenPositions(): Promise<Position[]> {
+    const result = await this.pool.query<Position>(
+      `SELECT 
+        id, market, outcome, side, size, entry_price as "entryPrice",
+        current_price as "currentPrice", pnl, status, opened_at as "openedAt",
+        closed_at as "closedAt", original_trader as "originalTrader"
       FROM positions 
       WHERE status = 'open'
-      ORDER BY opened_at DESC
-    `);
+      ORDER BY opened_at DESC`
+    );
 
-    return stmt.all() as Position[];
+    return result.rows;
   }
 
-  getPositionsByMarket(market: string): Position[] {
-    const stmt = this.db.prepare(`
-      SELECT 
-        id, market, outcome, side, size, entry_price as entryPrice,
-        current_price as currentPrice, pnl, status, opened_at as openedAt,
-        closed_at as closedAt, original_trader as originalTrader
+  async getPositionsByMarket(market: string): Promise<Position[]> {
+    const result = await this.pool.query<Position>(
+      `SELECT 
+        id, market, outcome, side, size, entry_price as "entryPrice",
+        current_price as "currentPrice", pnl, status, opened_at as "openedAt",
+        closed_at as "closedAt", original_trader as "originalTrader"
       FROM positions 
-      WHERE market = ? AND status = 'open'
-    `);
+      WHERE market = $1 AND status = 'open'`,
+      [market]
+    );
 
-    return stmt.all(market) as Position[];
+    return result.rows;
   }
 
-  getTotalMarketExposure(market: string): number {
-    const stmt = this.db.prepare(`
-      SELECT COALESCE(SUM(size * entry_price), 0) as total
+  async getTotalMarketExposure(market: string): Promise<number> {
+    const result = await this.pool.query<{ total: string }>(
+      `SELECT COALESCE(SUM(size * entry_price), 0) as total
       FROM positions 
-      WHERE market = ? AND status = 'open'
-    `);
+      WHERE market = $1 AND status = 'open'`,
+      [market]
+    );
 
-    const result = stmt.get(market) as { total: number };
-    return result.total;
+    return parseFloat(result.rows[0].total);
   }
 
-  saveCopyDecision(
+  async saveCopyDecision(
     tradeId: string,
     shouldCopy: boolean,
     reason: string | undefined,
@@ -246,27 +254,26 @@ export class DatabaseManager {
       slippage: boolean;
       riskLimits: boolean;
     }
-  ): void {
-    const stmt = this.db.prepare(`
-      INSERT INTO copy_decisions (
+  ): Promise<void> {
+    await this.pool.query(
+      `INSERT INTO copy_decisions (
         trade_id, should_copy, reason, trader_whitelisted, size_threshold,
         liquidity_ok, slippage_ok, risk_limits_ok
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-
-    stmt.run(
-      tradeId,
-      shouldCopy ? 1 : 0,
-      reason,
-      checks.traderWhitelisted ? 1 : 0,
-      checks.sizeThreshold ? 1 : 0,
-      checks.liquidity ? 1 : 0,
-      checks.slippage ? 1 : 0,
-      checks.riskLimits ? 1 : 0
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [
+        tradeId,
+        shouldCopy,
+        reason,
+        checks.traderWhitelisted,
+        checks.sizeThreshold,
+        checks.liquidity,
+        checks.slippage,
+        checks.riskLimits,
+      ]
     );
   }
 
-  saveExecutionLog(
+  async saveExecutionLog(
     tradeId: string,
     success: boolean,
     positionId?: string,
@@ -274,22 +281,21 @@ export class DatabaseManager {
     executedPrice?: number,
     executedSize?: number,
     error?: string
-  ): void {
-    const stmt = this.db.prepare(`
-      INSERT INTO execution_log (
+  ): Promise<void> {
+    await this.pool.query(
+      `INSERT INTO execution_log (
         trade_id, position_id, success, order_id, executed_price, executed_size, error, timestamp
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, unixepoch())
-    `);
-
-    stmt.run(tradeId, positionId, success ? 1 : 0, orderId, executedPrice, executedSize, error);
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, EXTRACT(EPOCH FROM NOW())::BIGINT)`,
+      [tradeId, positionId, success, orderId, executedPrice, executedSize, error]
+    );
   }
 
-  close(): void {
-    this.db.close();
-    logger.info('Database connection closed');
+  async close(): Promise<void> {
+    await this.pool.end();
+    logger.info('Database connection pool closed');
   }
 }
 
-export const createDatabase = (dbPath?: string): DatabaseManager => {
-  return DatabaseManager.getInstance(dbPath);
+export const createDatabase = async (databaseUrl: string): Promise<DatabaseManager> => {
+  return DatabaseManager.getInstance(databaseUrl);
 };

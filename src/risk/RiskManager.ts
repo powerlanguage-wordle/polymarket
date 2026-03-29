@@ -22,8 +22,8 @@ export class RiskManager {
     this.positionSizer = new PositionSizer(config);
   }
 
-  canTakeTrade(trade: Trade): RiskLimits {
-    const openPositions = this.db.getOpenPositions();
+  async canTakeTrade(trade: Trade): Promise<RiskLimits> {
+    const openPositions = await this.db.getOpenPositions();
 
     if (openPositions.length >= this.config.riskParams.maxPositions) {
       logger.warn('Maximum positions limit reached', {
@@ -36,7 +36,7 @@ export class RiskManager {
       };
     }
 
-    const allocatedCapital = this.capitalCalculator.calculateAllocationForTrade();
+    const allocatedCapital = await this.capitalCalculator.calculateAllocationForTrade();
 
     if (allocatedCapital <= 0) {
       logger.warn('No capital available for trading', { tradeId: trade.id });
@@ -59,7 +59,7 @@ export class RiskManager {
     const orderValue = positionSize * trade.price;
     const totalCapital = this.capitalCalculator.getTotalCapital();
 
-    const canAddExposure = this.exposureTracker.canAddExposure(trade.market, orderValue, totalCapital);
+    const canAddExposure = await this.exposureTracker.canAddExposure(trade.market, orderValue, totalCapital);
 
     if (!canAddExposure) {
       logger.warn('Market exposure limit would be exceeded', {
@@ -86,8 +86,8 @@ export class RiskManager {
     };
   }
 
-  calculatePositionSize(trade: Trade): number {
-    const allocatedCapital = this.capitalCalculator.calculateAllocationForTrade();
+  async calculatePositionSize(trade: Trade): Promise<number> {
+    const allocatedCapital = await this.capitalCalculator.calculateAllocationForTrade();
     return this.positionSizer.calculatePositionSize(trade, allocatedCapital);
   }
 

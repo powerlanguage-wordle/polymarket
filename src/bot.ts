@@ -12,28 +12,33 @@ import { PolymarketClient } from './execution/PolymarketClient';
 import { PositionManager } from './positions/PositionManager';
 import { TradeLogger } from './positions/TradeLogger';
 import { HealthChecker } from './monitoring/HealthChecker';
-import { StatsServer } from './api/StatsServer';
 import type { Trade } from './types';
 
 const logger = createLogger('Bot');
 
 class PolymarketCopyBot {
-  private tradeMonitor: TradeMonitor;
-  private validationPipeline: ValidationPipeline;
-  private riskManager: RiskManager;
-  private trader: PaperTrader | LiveTrader;
-  private positionManager: PositionManager;
-  private tradeLogger: TradeLogger;
-  private healthChecker: HealthChecker;
-  private statsServer: StatsServer;
-  private db: ReturnType<typeof createDatabase>;
+  private tradeMonitor!: TradeMonitor;
+  private validationPipeline!: ValidationPipeline;
+  private riskManager!: RiskManager;
+  private trader!: PaperTrader | LiveTrader;
+  private positionManager!: PositionManager;
+  private tradeLogger!: TradeLogger;
+  private healthChecker!: HealthChecker;
+  private db!: Awaited<ReturnType<typeof createDatabase>>;
   private isShuttingDown = false;
+  private initialized = false;
 
   constructor() {
     logger.info('Initializing Polymarket Copy Trading Bot...');
     this.displayBanner();
+  }
 
-    this.db = createDatabase(config.database.path);
+  private async initialize(): Promise<void> {
+    if (this.initialized) return;
+
+    // Initialize database
+    const databaseUrl = configManager.getDatabaseUrl();
+    this.db = await createDatabase(databaseUrl);
 
     // Create ClobClient for both paper and live modes (needed for trade monitoring)
     const apiKey = configManager.getApiKey();
@@ -48,7 +53,6 @@ class PolymarketCopyBot {
     this.positionManager = new PositionManager(this.db);
     this.tradeLogger = new TradeLogger(this.db);
     this.healthChecker = new HealthChecker();
-    this.statsServer = new StatsServer(this.db, this.riskManager.getCapitalCalculator());
 
     if (config.execution.mode === 'paper') {
       this.trader = new PaperTrader(this.db);
@@ -60,6 +64,7 @@ class PolymarketCopyBot {
 
     this.setupEventHandlers();
     this.setupGracefulShutdown();
+    this.initialized = true;
   }
 
   private displayBanner(): void {
@@ -97,15 +102,15 @@ class PolymarketCopyBot {
         size: trade.size,
       });
 
-      this.tradeLogger.logTrade(trade);
+      await this.tradeLogger.logTrade(trade);
       this.healthChecker.updateLastTradeTime();
 
-      if (this.db.isTradeProcessed(trade.id)) {
+      if (await this.db.isTradeProcessed(trade.id)) {
         logger.debug('Trade already processed, skipping', { tradeId: trade.id });
         return;
       }
 
-      const riskLimits = this.riskManager.canTakeTrade(trade);
+      const riskLimits = await this.riskManager.canTakeTrade(trade);
 
       if (!riskLimits.canTrade) {
         logger.info('Trade rejected by risk manager', {
@@ -118,22 +123,22 @@ class PolymarketCopyBot {
         validation.reason = riskLimits.reason;
         validation.checks.riskLimits = false;
 
-        this.tradeLogger.logCopyDecision(trade, validation);
-        this.tradeLogger.markProcessed(trade.id);
+        await this.tradeLogger.logCopyDecision(trade, validation);
+        await this.tradeLogger.markProcessed(trade.id);
         return;
       }
 
       const positionSize = riskLimits.positionSize || 0;
 
       const validation = await this.validationPipeline.shouldCopyTrade(trade, positionSize);
-      this.tradeLogger.logCopyDecision(trade, validation);
+      await this.tradeLogger.logCopyDecision(trade, validation);
 
       if (!validation.shouldCopy) {
         logger.info('Trade validation failed', {
           tradeId: trade.id,
           reason: validation.reason,
         });
-        this.tradeLogger.markProcessed(trade.id);
+        await this.tradeLogger.markProcessed(trade.id);
         return;
       }
 
@@ -144,7 +149,7 @@ class PolymarketCopyBot {
       });
 
       const executionResult = await this.trader.executeTrade(trade, positionSize);
-      this.tradeLogger.logExecution(trade, executionResult);
+      await this.tradeLogger.logExecution(trade, executionResult);
 
       if (executionResult.success) {
         logger.info('Trade copied successfully!', {
@@ -159,8 +164,8 @@ class PolymarketCopyBot {
         });
       }
 
-      this.tradeLogger.markProcessed(trade.id);
-      this.logPortfolioSummary();
+      await this.tradeLogger.markProcessed(trade.id);
+      await this.logPortfolioSummary();
     } catch (error) {
       logger.error('Error handling new trade', {
         tradeId: trade.id,
@@ -170,8 +175,8 @@ class PolymarketCopyBot {
     }
   }
 
-  private logPortfolioSummary(): void {
-    const summary = this.positionManager.getPortfolioSummary();
+  private async logPortfolioSummary(): Promise<void> {
+    const summary = await this.positionManager.getPortfolioSummary();
     logger.info('Portfolio Summary', {
       positions: summary.totalPositions,
       value: summary.totalValue.toFixed(2),
@@ -189,13 +194,12 @@ class PolymarketCopyBot {
       logger.info(`Received ${signal}, shutting down gracefully...`);
 
       this.tradeMonitor.stop();
-      await this.statsServer.stop();
 
       await new Promise((resolve) => setTimeout(resolve, 1000));
 
-      this.logPortfolioSummary();
+      await this.logPortfolioSummary();
 
-      this.db.close();
+      await this.db.close();
 
       logger.info('Shutdown complete');
       process.exit(0);
@@ -224,7 +228,7 @@ class PolymarketCopyBot {
     try {
       logger.info('Starting bot...');
 
-      await this.statsServer.start();
+      await this.initialize();
       await this.tradeMonitor.start();
 
       setInterval(async () => {

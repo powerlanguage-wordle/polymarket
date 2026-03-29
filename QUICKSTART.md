@@ -22,55 +22,92 @@ Edit `config.json` and add real trader addresses you want to track:
 }
 ```
 
-### Set Up API Credentials (Optional for Paper Trading, Required for Live)
+### Set Up Environment Variables
 
 ```bash
 cp .env.example .env
 ```
 
-**For paper trading:** The default values work fine.
+Edit `.env` and configure:
 
-**For live trading:** 
-1. Add your private key to `.env`:
+1. **Database URL (Required)**: Add your PostgreSQL connection string from Render:
    ```
-   POLYMARKET_PRIVATE_KEY=0x1234567890abcdef...
+   DATABASE_URL=postgresql://username:password@host.render.com:5432/dbname
    ```
-2. Run the setup script to generate API credentials:
-   ```bash
-   npm run setup
-   ```
-   This will automatically derive and add your API credentials to `.env`
+
+2. **API Credentials** (Optional for Paper Trading, Required for Live):
+   - Add your private key:
+     ```
+     POLYMARKET_PRIVATE_KEY=0x1234567890abcdef...
+     ```
+   - Run the setup script to generate API credentials:
+     ```bash
+     npm run setup
+     ```
+     This will automatically derive and add your API credentials to `.env`
 
 ## Step 3: Build
 ```bash
 npm run build
 ```
 
-## Step 4: Run in Paper Trading Mode
+## Step 4: Build the Dashboard
 ```bash
-npm start
-# or for development with auto-restart:
-npm run dev
+npm run build:dashboard
 ```
 
-## Step 5: Monitor
+## Step 5: Run the Bot and Dashboard
+
+The bot and dashboard run as **separate processes**. You'll need to run both:
+
+### Option 1: Development Mode (Recommended for Testing)
+Open two terminal windows:
+
+**Terminal 1 - Bot:**
+```bash
+npm run dev:bot
+```
+
+**Terminal 2 - Dashboard Server:**
+```bash
+npm run dev:server
+```
+
+### Option 2: Production Mode
+Open two terminal windows:
+
+**Terminal 1 - Bot:**
+```bash
+npm run start:bot
+```
+
+**Terminal 2 - Dashboard Server:**
+```bash
+npm run start:server
+```
+
+The dashboard will be available at: http://localhost:3001
+
+## Step 6: Monitor
 
 Watch the logs:
 ```bash
 tail -f logs/bot.log
 ```
 
-Check the database:
-```bash
-sqlite3 data/bot.db "SELECT * FROM trades ORDER BY timestamp DESC LIMIT 10"
-```
+**Access the Dashboard**: Open http://localhost:3001 to view:
+- Portfolio summary
+- Open positions
+- Capital allocation
+- Real-time P&L
 
-## Step 6: Go Live (when ready)
+## Step 7: Go Live (when ready)
 
 1. Make sure you've run `npm run setup` to generate API credentials
 2. Edit `config.json` and set `"mode": "live"`
 3. Start with small capital allocation
-4. Monitor closely!
+4. Start both the bot and dashboard server (see Step 5)
+5. Monitor closely!
 
 ## Common Commands
 
@@ -81,13 +118,25 @@ npm run setup
 # Run tests
 npm test
 
-# Build
+# Build TypeScript files
 npm run build
 
-# Development mode (auto-restart)
-npm run dev
+# Build dashboard
+npm run build:dashboard
 
-# Production mode
+# Development mode - Bot only
+npm run dev:bot
+
+# Development mode - Dashboard server only
+npm run dev:server
+
+# Production mode - Bot only
+npm run start:bot
+
+# Production mode - Dashboard server only
+npm run start:server
+
+# Legacy command (runs bot only, for backward compatibility)
 npm start
 
 # Lint code

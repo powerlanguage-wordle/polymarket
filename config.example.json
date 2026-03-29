@@ -21,9 +21,6 @@
     "chainId": 137,
     "feeRateBps": 200
   },
-  "database": {
-    "path": "./data/bot.db"
-  },
   "logging": {
     "level": "info",
     "directory": "./logs",

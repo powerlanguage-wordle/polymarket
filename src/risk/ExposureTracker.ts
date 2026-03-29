@@ -13,14 +13,14 @@ export class ExposureTracker {
     this.db = db;
   }
 
-  getMarketExposure(market: string): number {
-    const exposure = this.db.getTotalMarketExposure(market);
+  async getMarketExposure(market: string): Promise<number> {
+    const exposure = await this.db.getTotalMarketExposure(market);
     logger.debug('Market exposure', { market, exposure: exposure.toFixed(2) });
     return exposure;
   }
 
-  canAddExposure(market: string, additionalExposure: number, totalCapital: number): boolean {
-    const currentExposure = this.getMarketExposure(market);
+  async canAddExposure(market: string, additionalExposure: number, totalCapital: number): Promise<boolean> {
+    const currentExposure = await this.getMarketExposure(market);
     const totalExposure = currentExposure + additionalExposure;
     const maxExposure = totalCapital * this.config.riskParams.maxMarketExposure;
 
@@ -39,8 +39,8 @@ export class ExposureTracker {
     return canAdd;
   }
 
-  getTotalExposure(): number {
-    const openPositions = this.db.getOpenPositions();
+  async getTotalExposure(): Promise<number> {
+    const openPositions = await this.db.getOpenPositions();
     const totalExposure = openPositions.reduce((sum, pos) => {
       return sum + pos.size * pos.entryPrice;
     }, 0);
@@ -48,8 +48,8 @@ export class ExposureTracker {
     return totalExposure;
   }
 
-  getExposureByMarket(): Map<string, number> {
-    const openPositions = this.db.getOpenPositions();
+  async getExposureByMarket(): Promise<Map<string, number>> {
+    const openPositions = await this.db.getOpenPositions();
     const exposureMap = new Map<string, number>();
 
     for (const position of openPositions) {

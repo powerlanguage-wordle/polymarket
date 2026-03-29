@@ -42,9 +42,9 @@ export class StatsServer {
     });
 
     // Portfolio summary endpoint
-    this.app.get('/api/stats/portfolio', (_req: Request, res: Response) => {
+    this.app.get('/api/stats/portfolio', async (_req: Request, res: Response) => {
       try {
-        const positions = this.db.getOpenPositions();
+        const positions = await this.db.getOpenPositions();
         
         const totalValue = positions.reduce((sum, pos) => {
           return sum + pos.size * pos.entryPrice;
@@ -73,9 +73,9 @@ export class StatsServer {
     });
 
     // All positions endpoint
-    this.app.get('/api/stats/positions', (_req: Request, res: Response) => {
+    this.app.get('/api/stats/positions', async (_req: Request, res: Response) => {
       try {
-        const positions = this.db.getOpenPositions();
+        const positions = await this.db.getOpenPositions();
         
         // Format positions for UI
         const formattedPositions = positions.map((pos: Position) => ({
@@ -107,14 +107,14 @@ export class StatsServer {
     });
 
     // Capital overview endpoint
-    this.app.get('/api/stats/overview', (_req: Request, res: Response) => {
+    this.app.get('/api/stats/overview', async (_req: Request, res: Response) => {
       try {
         const totalCapital = this.capitalCalculator.getTotalCapital();
-        const availableCapital = this.capitalCalculator.calculateAvailableCapital();
+        const availableCapital = await this.capitalCalculator.calculateAvailableCapital();
         const allocatedCapital = totalCapital - availableCapital;
         
         // Get exposure by market
-        const positions = this.db.getOpenPositions();
+        const positions = await this.db.getOpenPositions();
         const exposureByMarket: { [key: string]: number } = {};
         
         positions.forEach((pos: Position) => {

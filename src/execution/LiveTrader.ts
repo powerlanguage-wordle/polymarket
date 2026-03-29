@@ -49,9 +49,9 @@ export class LiveTrader {
             originalTrader: trade.trader,
           };
 
-          this.db.savePosition(position);
+          await this.db.savePosition(position);
 
-          this.db.saveExecutionLog(
+          await this.db.saveExecutionLog(
             trade.id,
             true,
             positionId,
@@ -104,7 +104,7 @@ export class LiveTrader {
       }
     }
 
-    this.db.saveExecutionLog(trade.id, false, undefined, undefined, undefined, undefined, lastError);
+    await this.db.saveExecutionLog(trade.id, false, undefined, undefined, undefined, undefined, lastError);
 
     logger.error('Trade execution failed after all retries', {
       tradeId: trade.id,

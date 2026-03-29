@@ -26,9 +26,6 @@ const ConfigSchema = z.object({
     chainId: z.number().int(),
     feeRateBps: z.number().int().min(0),
   }),
-  database: z.object({
-    path: z.string(),
-  }),
   logging: z.object({
     level: z.enum(['error', 'warn', 'info', 'debug']),
     directory: z.string(),
@@ -76,10 +73,6 @@ class ConfigManager {
 
     if (process.env.POLL_INTERVAL_MS) {
       config.execution.pollInterval = parseInt(process.env.POLL_INTERVAL_MS, 10);
-    }
-
-    if (process.env.DATABASE_PATH) {
-      config.database.path = process.env.DATABASE_PATH;
     }
 
     if (process.env.LOG_LEVEL) {
@@ -137,6 +130,14 @@ class ConfigManager {
 
   getChainId(): number {
     return parseInt(process.env.POLYMARKET_CHAIN_ID || String(this.config.polymarket.chainId), 10);
+  }
+
+  getDatabaseUrl(): string {
+    const databaseUrl = process.env.DATABASE_URL;
+    if (!databaseUrl) {
+      throw new Error('DATABASE_URL environment variable is required');
+    }
+    return databaseUrl;
   }
 }
 

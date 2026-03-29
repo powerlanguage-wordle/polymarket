@@ -73,9 +73,6 @@ export interface Config {
     chainId: number;
     feeRateBps: number;
   };
-  database: {
-    path: string;
-  };
   logging: {
     level: string;
     directory: string;

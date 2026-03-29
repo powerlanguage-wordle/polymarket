@@ -11,16 +11,16 @@ export class PositionManager {
     this.db = db;
   }
 
-  getOpenPositions(): Position[] {
+  async getOpenPositions(): Promise<Position[]> {
     return this.db.getOpenPositions();
   }
 
-  getPositionsByMarket(market: string): Position[] {
+  async getPositionsByMarket(market: string): Promise<Position[]> {
     return this.db.getPositionsByMarket(market);
   }
 
-  updatePosition(positionId: string, currentPrice: number): void {
-    const positions = this.db.getOpenPositions();
+  async updatePosition(positionId: string, currentPrice: number): Promise<void> {
+    const positions = await this.db.getOpenPositions();
     const position = positions.find((p) => p.id === positionId);
 
     if (!position) {
@@ -31,7 +31,7 @@ export class PositionManager {
     const priceDiff = currentPrice - position.entryPrice;
     const pnl = position.side === 'BUY' ? priceDiff * position.size : -priceDiff * position.size;
 
-    this.db.updatePosition(positionId, {
+    await this.db.updatePosition(positionId, {
       currentPrice,
       pnl,
     });
@@ -43,8 +43,8 @@ export class PositionManager {
     });
   }
 
-  closePosition(positionId: string, exitPrice: number): void {
-    const positions = this.db.getOpenPositions();
+  async closePosition(positionId: string, exitPrice: number): Promise<void> {
+    const positions = await this.db.getOpenPositions();
     const position = positions.find((p) => p.id === positionId);
 
     if (!position) {
@@ -55,7 +55,7 @@ export class PositionManager {
     const priceDiff = exitPrice - position.entryPrice;
     const pnl = position.side === 'BUY' ? priceDiff * position.size : -priceDiff * position.size;
 
-    this.db.updatePosition(positionId, {
+    await this.db.updatePosition(positionId, {
       status: 'closed',
       currentPrice: exitPrice,
       pnl,
@@ -69,13 +69,13 @@ export class PositionManager {
     });
   }
 
-  getPortfolioSummary(): {
+  async getPortfolioSummary(): Promise<{
     totalPositions: number;
     totalValue: number;
     totalPnl: number;
     positions: Position[];
-  } {
-    const positions = this.getOpenPositions();
+  }> {
+    const positions = await this.getOpenPositions();
 
     const totalValue = positions.reduce((sum, pos) => {
       return sum + pos.size * pos.entryPrice;

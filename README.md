@@ -11,12 +11,13 @@ A production-ready automated trading bot that monitors selected Polymarket trade
 - **Paper Trading Mode** - Test strategies safely before going live
 - **Comprehensive Logging** - Winston-based logging with trade history and execution logs
 - **Graceful Error Handling** - Automatic retries, circuit breakers, and safe shutdowns
-- **SQLite Database** - Persistent storage for positions, trades, and decisions
+- **PostgreSQL Database** - Persistent storage for positions, trades, and decisions (Render-compatible)
 - **REST API** - Access portfolio stats programmatically via HTTP endpoints
 
 ## 📋 Prerequisites
 
 - Node.js >= 18.0.0
+- PostgreSQL database (Render provides free PostgreSQL databases)
 - Polymarket API credentials (for live trading)
 - Basic understanding of prediction markets
 
@@ -33,9 +34,14 @@ A production-ready automated trading bot that monitors selected Polymarket trade
    cp .env.example .env
    ```
 
-3. **Configure your settings:**
+3. **Set up PostgreSQL database:**
+   - Sign up for [Render](https://render.com) (free tier available)
+   - Create a new PostgreSQL database
+   - Copy the DATABASE_URL connection string
+
+4. **Configure your settings:**
    - Edit `config.json` with your tracked trader addresses and risk parameters
-   - Edit `.env` with your API credentials (for live trading)
+   - Edit `.env` with your DATABASE_URL and API credentials (for live trading)
 
 ## ⚙️ Configuration
 
@@ -84,6 +90,9 @@ Polymarket uses a two-level authentication system. You need to derive API creden
 ### .env
 
 ```bash
+# Database (Required)
+DATABASE_URL=postgresql://username:password@host.render.com:5432/dbname
+
 # Step 1: Add your private key
 POLYMARKET_PRIVATE_KEY=0x1234567890abcdef...
 
@@ -95,6 +104,7 @@ POLYMARKET_API_PASSPHRASE=your_api_passphrase_here
 # Optional overrides
 EXECUTION_MODE=paper
 POLL_INTERVAL_MS=15000
+DASHBOARD_PORT=3001
 LOG_LEVEL=info
 ```
 
@@ -120,19 +130,29 @@ npm run setup  # Generates API credentials
 
 ### Development Mode (with auto-restart)
 ```bash
-npm run dev
+# Terminal 1 - Bot
+npm run dev:bot
+
+# Terminal 2 - Dashboard Server
+npm run dev:server
 ```
 
 ### Build and Run Production
 ```bash
 npm run build
-npm start
+npm run build:dashboard
+
+# Terminal 1 - Bot
+npm run start:bot
+
+# Terminal 2 - Dashboard Server
+npm run start:server
 ```
 
 ### Paper Trading (Recommended First)
 1. Set `"mode": "paper"` in `config.json`
 2. Run the bot and monitor logs in `logs/bot.log`
-3. Review positions in `data/bot.db` using SQLite browser
+3. Review positions via the web dashboard at http://localhost:3001
 4. Analyze performance and validation decisions
 
 ### Live Trading (⚠️ Real Money)
@@ -187,7 +207,7 @@ polymarket/
 │   ├── config/
 │   │   └── index.ts             # Configuration management
 │   ├── db/
-│   │   └── schema.ts            # SQLite schema and queries
+│   │   └── schema.ts            # PostgreSQL schema and queries
 │   ├── execution/
 │   │   ├── PaperTrader.ts       # Simulated execution
 │   │   ├── LiveTrader.ts        # Real order placement
@@ -222,9 +242,8 @@ polymarket/
 │   │   ├── api/
 │   │   │   └── client.ts        # API client
 │   │   └── components/          # React components
-│   └── dist/                    # Built static files (served by bot)
+│   └── dist/                    # Built static files (served by dashboard server)
 ├── test/                        # Jest tests
-├── data/                        # SQLite database
 ├── logs/                        # Log files
 └── config.json                  # Bot configuration
 ```
@@ -244,17 +263,14 @@ npm test -- --coverage
 
 ## 📝 Database Schema
 
-The bot uses SQLite with the following tables:
+The bot uses PostgreSQL with the following tables:
 
 - **trades** - All detected trades from monitored wallets
 - **positions** - Open and closed positions
 - **copy_decisions** - Validation results for each trade
 - **execution_log** - Order execution history
 
-Query the database:
-```bash
-sqlite3 data/bot.db "SELECT * FROM positions WHERE status='open'"
-```
+**Access via Dashboard**: View positions and stats at http://localhost:3001
 
 ## 🔍 Monitoring
 

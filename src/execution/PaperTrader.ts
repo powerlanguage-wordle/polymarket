@@ -38,9 +38,9 @@ export class PaperTrader {
     };
 
     try {
-      this.db.savePosition(position);
+      await this.db.savePosition(position);
 
-      this.db.saveExecutionLog(
+      await this.db.saveExecutionLog(
         trade.id,
         true,
         positionId,
