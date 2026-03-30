@@ -8,16 +8,18 @@ import type { Config } from '../types';
 const logger = createLogger('TradeMonitor');
 
 interface RawPolymarketTrade {
-  id: string;
-  market: string;
-  asset_id: string;
-  maker_address: string;
+  proxyWallet: string;
   side: string;
-  price: string;
-  size: string;
+  asset: string;
+  conditionId: string;
+  size: number;
+  price: number;
   timestamp: number;
-  transaction_hash?: string;
-  outcome?: string;
+  title: string;
+  slug: string;
+  outcome: string;
+  outcomeIndex: number;
+  transactionHash?: string;
 }
 
 export class TradeMonitor extends EventEmitter {
@@ -102,16 +104,19 @@ export class TradeMonitor extends EventEmitter {
       const recentTrades = await this.getRecentTrades(traderAddress);
 
       for (const rawTrade of recentTrades) {
-        if (this.isDuplicate(rawTrade.id)) {
+        // Generate ID from transaction hash or fallback
+        const tradeId = rawTrade.transactionHash || `${rawTrade.conditionId}-${rawTrade.timestamp}`;
+        
+        if (this.isDuplicate(tradeId)) {
           continue;
         }
 
         const normalizedTrade = this.normalizer.normalize(rawTrade);
 
         if (normalizedTrade) {
-          this.cache.set(rawTrade.id, true);
+          this.cache.set(tradeId, true);
           this.emit('newTrade', normalizedTrade);
-          console.log(`🔔 NEW TRADE DETECTED (Polling): ${normalizedTrade.trader.substring(0, 10)}... | ${normalizedTrade.market} | ${normalizedTrade.side} ${normalizedTrade.size} @ $${normalizedTrade.price}`);
+          console.log(`🔔 NEW TRADE DETECTED (Polling): ${normalizedTrade.trader.substring(0, 10)}... | ${normalizedTrade.outcome} | ${normalizedTrade.side} ${normalizedTrade.size.toFixed(0)} @ $${normalizedTrade.price.toFixed(4)}`);
           logger.info('New trade detected', {
             tradeId: normalizedTrade.id,
             trader: normalizedTrade.trader,

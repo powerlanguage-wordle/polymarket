@@ -67,18 +67,6 @@ class ConfigManager {
 
     const config = result.data;
 
-    if (process.env.EXECUTION_MODE) {
-      config.execution.mode = process.env.EXECUTION_MODE as 'paper' | 'live';
-    }
-
-    if (process.env.POLL_INTERVAL_MS) {
-      config.execution.pollInterval = parseInt(process.env.POLL_INTERVAL_MS, 10);
-    }
-
-    if (process.env.LOG_LEVEL) {
-      config.logging.level = process.env.LOG_LEVEL as 'error' | 'warn' | 'info' | 'debug';
-    }
-
     this.normalizeTraderAddresses(config);
 
     return config;
@@ -129,7 +117,7 @@ class ConfigManager {
   }
 
   getChainId(): number {
-    return parseInt(process.env.POLYMARKET_CHAIN_ID || String(this.config.polymarket.chainId), 10);
+    return this.config.polymarket.chainId;
   }
 
   getDatabaseUrl(): string {

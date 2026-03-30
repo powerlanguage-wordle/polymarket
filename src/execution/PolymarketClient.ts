@@ -133,27 +133,33 @@ export class PolymarketClient {
     }
   }
 
-  async getTrades(makerAddress: string, limit: number = 20): Promise<any[]> {
-    if (!this.client) {
-      throw new Error('CLOB client not initialized');
-    }
-
+  async getTrades(userAddress: string, limit: number = 20): Promise<any[]> {
     try {
-      console.log(`   \ud83d\udd0d Fetching trades for trader: ${makerAddress.substring(0, 10)}...`);
-      const trades = await this.client.getTrades({ maker_address: makerAddress }, true);
-      console.log(`   \u2139\ufe0f Found ${trades.length} trades for this trader`);
+      console.log(`   🔍 Fetching trades for trader: ${userAddress.substring(0, 10)}...`);
       
-      if (trades.length > 0 && trades[0]) {
-        const firstTrade = trades[0] as any;
-        const timestamp = firstTrade.timestamp || firstTrade.created_at || Date.now() / 1000;
-        console.log(`   🕐 Most recent trade timestamp: ${new Date(timestamp * 1000).toISOString()}`);
+      // Use the data-api endpoint which includes ALL trades (both maker and taker)
+      const url = `https://data-api.polymarket.com/trades?user=${userAddress}&limit=${limit}&takerOnly=false`;
+      
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
       
-      return trades.slice(0, limit);
+      const trades = await response.json() as any[];
+      console.log(`   ℹ️ Found ${trades.length} trades for this trader`);
+      
+      if (trades.length > 0 && trades[0]) {
+        const firstTrade = trades[0];
+        const timestamp = firstTrade.timestamp;
+        console.log(`   🕐 Most recent trade: ${new Date(timestamp * 1000).toISOString()}`);
+        console.log(`   📊 ${firstTrade.side} ${firstTrade.size} of "${firstTrade.outcome}" @ $${firstTrade.price.toFixed(4)}`);
+      }
+      
+      return trades;
     } catch (error) {
-      console.error(`   \u274c API Error fetching trades for ${makerAddress.substring(0, 10)}...: ${error instanceof Error ? error.message : String(error)}`);
+      console.error(`   ❌ API Error fetching trades for ${userAddress.substring(0, 10)}...: ${error instanceof Error ? error.message : String(error)}`);
       logger.error('Failed to get trades', {
-        makerAddress,
+        userAddress,
         error: error instanceof Error ? error.message : String(error),
       });
       return [];

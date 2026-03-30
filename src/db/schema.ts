@@ -131,7 +131,7 @@ export class DatabaseManager {
         trade.id,
         trade.trader.toLowerCase(),
         trade.market,
-        trade.marketName,
+        trade.outcome, // Use outcome as market_name for now
         trade.outcome,
         trade.side,
         trade.price,

@@ -7,28 +7,41 @@ npm install
 
 ## Step 2: Configure the Bot
 
-### Create config.json
+### Create config.json (Main Configuration)
 ```bash
 cp config.example.json config.json
 ```
 
-Edit `config.json` and add real trader addresses you want to track:
+Edit `config.json` to configure all bot settings:
+- **Tracked Traders**: Real trader addresses you want to copy
+- **Execution Mode**: `paper` (simulated) or `live` (real money)
+- **Poll Interval**: How often to check for new trades (milliseconds)
+- **Risk Parameters**: Position sizing, slippage limits, etc.
+- **Logging**: Log level and file settings
+
 ```json
 {
   "trackedTraders": [
-    "0xYourTrackedTraderAddress1",
-    "0xYourTrackedTraderAddress2"
-  ]
+    "0xYourTrackedTraderAddress1"
+  ],
+  "execution": {
+    "mode": "paper",
+    "pollInterval": 5000
+  },
+  "riskParams": {
+    "maxCapitalPerTrade": 0.05,
+    "maxSlippage": 0.05
+  }
 }
 ```
 
-### Set Up Environment Variables
+### Set Up Environment Variables (Secrets Only)
 
 ```bash
 cp .env.example .env
 ```
 
-Edit `.env` and configure:
+Edit `.env` - this file should **only contain secrets/credentials**:
 
 1. **Database URL (Required)**: Add your PostgreSQL connection string from Render:
    ```
@@ -45,6 +58,8 @@ Edit `.env` and configure:
      npm run setup
      ```
      This will automatically derive and add your API credentials to `.env`
+
+**Note**: All non-secret configuration (execution mode, polling interval, logging, etc.) should be set in `config.json`, not `.env`.
 
 ## Step 3: Build
 ```bash

@@ -2,7 +2,7 @@ export interface Trade {
   id: string;
   trader: string;
   market: string;
-  marketName?: string;
+  asset?: string;
   outcome: string;
   side: 'BUY' | 'SELL';
   price: number;

@@ -11,7 +11,7 @@
   },
   "execution": {
     "mode": "paper",
-    "pollInterval": 2000,
+    "pollInterval": 5000,
     "retryAttempts": 3,
     "retryDelayMs": 1000
   },
