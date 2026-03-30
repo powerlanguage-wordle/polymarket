@@ -13,6 +13,7 @@ import { PositionManager } from './positions/PositionManager';
 import { TradeLogger } from './positions/TradeLogger';
 import { HealthChecker } from './monitoring/HealthChecker';
 import { StatsServer } from './api/StatsServer';
+import { TelegramNotifier } from './notifications/TelegramNotifier';
 import type { Trade } from './types';
 
 const logger = createLogger('Bot');
@@ -26,6 +27,8 @@ class PolymarketCopyBot {
   private tradeLogger!: TradeLogger;
   private healthChecker!: HealthChecker;
   private statsServer!: StatsServer;
+  private telegramNotifier!: TelegramNotifier;
+  private hourlySummaryInterval!: NodeJS.Timeout;
   private db!: Awaited<ReturnType<typeof createDatabase>>;
   private isShuttingDown = false;
   private initialized = false;
@@ -56,6 +59,11 @@ class PolymarketCopyBot {
     this.tradeLogger = new TradeLogger(this.db);
     this.healthChecker = new HealthChecker();
     this.statsServer = new StatsServer(this.db, this.riskManager.getCapitalCalculator());
+    
+    // Initialize Telegram notifier
+    const telegramToken = process.env.TELEGRAM_BOT_TOKEN;
+    const telegramChatId = process.env.TELEGRAM_CHAT_ID;
+    this.telegramNotifier = new TelegramNotifier(telegramToken, telegramChatId);
 
     if (config.execution.mode === 'paper') {
       this.trader = new PaperTrader(this.db);
@@ -141,6 +149,9 @@ class PolymarketCopyBot {
 
       const validation = await this.validationPipeline.shouldCopyTrade(trade, positionSize);
       await this.tradeLogger.logCopyDecision(trade, validation);
+      
+      // Send Telegram notification for trade decision
+      await this.telegramNotifier.sendTradeDetected(trade, validation);
 
       if (!validation.shouldCopy) {
         console.log(`   ❌ REJECTED by validation: ${validation.reason}`);
@@ -163,6 +174,9 @@ class PolymarketCopyBot {
 
       const executionResult = await this.trader.executeTrade(trade, positionSize);
       await this.tradeLogger.logExecution(trade, executionResult);
+      
+      // Send Telegram notification for execution result
+      await this.telegramNotifier.sendExecutionResult(trade, executionResult);
 
       if (executionResult.success) {
         console.log(`   ✨ TRADE COPIED SUCCESSFULLY!`);
@@ -203,6 +217,57 @@ class PolymarketCopyBot {
     });
   }
 
+  private startHourlySummary(): void {
+    // Send summary every hour
+    this.hourlySummaryInterval = setInterval(async () => {
+      await this.sendHourlySummary();
+    }, 60 * 60 * 1000); // 1 hour
+    
+    logger.info('Hourly Telegram summary scheduled');
+  }
+  
+  private async sendHourlySummary(): Promise<void> {
+    try {
+      const summary = await this.positionManager.getPortfolioSummary();
+      const positions = await this.positionManager.getOpenPositions();
+      
+      // Get trade statistics from database
+      const stats = await this.db.getPool().query(`
+        SELECT 
+          COUNT(*) as total_trades,
+          SUM(CASE WHEN processed = true THEN 1 ELSE 0 END) as processed_trades
+        FROM trades
+        WHERE created_at > EXTRACT(EPOCH FROM NOW() - INTERVAL '1 hour')::BIGINT
+      `);
+      
+      const decisions = await this.db.getPool().query(`
+        SELECT 
+          SUM(CASE WHEN should_copy = true THEN 1 ELSE 0 END) as copied_trades,
+          SUM(CASE WHEN should_copy = false THEN 1 ELSE 0 END) as skipped_trades
+        FROM copy_decisions
+        WHERE timestamp > EXTRACT(EPOCH FROM NOW() - INTERVAL '1 hour')::BIGINT
+      `);
+      
+      const openPositions = positions.filter(p => p.status === 'open').length;
+      const closedPositions = positions.filter(p => p.status === 'closed').length;
+      
+      await this.telegramNotifier.sendHourlySummary({
+        totalTrades: parseInt(stats.rows[0]?.total_trades || '0'),
+        processedTrades: parseInt(stats.rows[0]?.processed_trades || '0'),
+        copiedTrades: parseInt(decisions.rows[0]?.copied_trades || '0'),
+        skippedTrades: parseInt(decisions.rows[0]?.skipped_trades || '0'),
+        positions,
+        totalPnL: summary.totalPnl,
+        openPositions,
+        closedPositions,
+      });
+    } catch (error) {
+      logger.error('Failed to send hourly summary', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
   private setupGracefulShutdown(): void {
     const shutdown = async (signal: string) => {
       if (this.isShuttingDown) {
@@ -213,6 +278,9 @@ class PolymarketCopyBot {
       logger.info(`Received ${signal}, shutting down gracefully...`);
 
       this.tradeMonitor.stop();
+      if (this.hourlySummaryInterval) {
+        clearInterval(this.hourlySummaryInterval);
+      }
       await this.statsServer.stop();
 
       await new Promise((resolve) => setTimeout(resolve, 1000));
@@ -252,6 +320,12 @@ class PolymarketCopyBot {
       await this.initialize();
       await this.statsServer.start();
       await this.tradeMonitor.start();
+      
+      // Send startup notification
+      await this.telegramNotifier.sendStartupMessage(config.execution.mode);
+      
+      // Setup hourly summary
+      this.startHourlySummary();
       
       console.log('\n\u2728 BOT IS NOW RUNNING AND MONITORING FOR TRADES!\n');
 

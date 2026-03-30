@@ -9,6 +9,7 @@
     "start": "node dist/bot.js",
     "dev": "ts-node src/bot.ts",
     "setup": "ts-node scripts/setup-api-credentials.ts",
+    "setup:telegram": "ts-node scripts/setup-telegram.ts",
     "reset": "ts-node scripts/reset-paper-trading.ts",
     "status": "ts-node scripts/check-trades.ts",
     "test": "jest",
@@ -27,11 +28,13 @@
   "license": "MIT",
   "dependencies": {
     "@polymarket/clob-client": "^5.8.1",
+    "@types/node-telegram-bot-api": "^0.64.14",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "ethers": "^5.7.2",
     "express": "^4.18.2",
     "lru-cache": "^10.2.0",
+    "node-telegram-bot-api": "^0.67.0",
     "pg": "^8.11.3",
     "winston": "^3.13.0",
     "zod": "^3.23.0"

@@ -296,6 +296,10 @@ export class DatabaseManager {
     );
   }
 
+  getPool(): Pool {
+    return this.pool;
+  }
+
   async close(): Promise<void> {
     await this.pool.end();
     logger.info('Database connection pool closed');

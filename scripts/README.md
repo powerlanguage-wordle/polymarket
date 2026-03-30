@@ -13,7 +13,27 @@ Automatically generates Polymarket API credentials from your wallet's private ke
 npm run setup
 ```
 
-### 2. Reset Paper Trading (`reset-paper-trading.ts`)
+### 2. Telegram Notification Setup (`setup-telegram.ts`)
+
+Configure Telegram notifications to receive real-time alerts and hourly summaries.
+
+**Usage:**
+```bash
+npm run setup:telegram
+```
+
+**What You'll Get:**
+- 🔔 Real-time notifications when trades are detected
+- ✅/❌ Trade decision alerts (copied or skipped with reasons)
+- ✨ Execution results (success/failure)
+- 📊 Hourly summaries with portfolio stats
+
+**Setup Steps:**
+1. Create a bot via @BotFather on Telegram
+2. Get your chat ID from @userinfobot
+3. Run `npm run setup:telegram` and enter the credentials
+
+### 3. Reset Paper Trading (`reset-paper-trading.ts`)
 
 Clears all paper trading data to start fresh.
 
@@ -30,7 +50,7 @@ npm run reset
 
 **Note:** Requires confirmation before proceeding. Uses transactions to ensure data integrity.
 
-### 3. Check Trade Status (`check-trades.ts`)
+### 4. Check Trade Status (`check-trades.ts`)
 
 Displays a summary of trade processing activity.
 
