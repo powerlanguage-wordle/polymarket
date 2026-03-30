@@ -329,9 +329,17 @@ export class PolymarketClient extends EventEmitter {
     }
 
     try {
+      console.log(`   \ud83d\udd0d Fetching trades for trader: ${makerAddress.substring(0, 10)}...`);
       const trades = await this.client.getTrades({ maker_address: makerAddress }, true);
+      console.log(`   \u2139\ufe0f Found ${trades.length} trades for this trader`);
+      
+      if (trades.length > 0) {
+        console.log(`   \ud83d\udd50 Most recent trade timestamp: ${new Date(trades[0].timestamp * 1000).toISOString()}`);
+      }
+      
       return trades.slice(0, limit);
     } catch (error) {
+      console.error(`   \u274c API Error fetching trades for ${makerAddress.substring(0, 10)}...: ${error instanceof Error ? error.message : String(error)}`);
       logger.error('Failed to get trades', {
         makerAddress,
         error: error instanceof Error ? error.message : String(error),

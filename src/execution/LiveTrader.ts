@@ -17,6 +17,8 @@ export class LiveTrader {
   }
 
   async executeTrade(trade: Trade, positionSize: number): Promise<ExecutionResult> {
+    console.log(`   ⚡ EXECUTING LIVE TRADE: ${trade.id}`);
+    
     logger.info('Executing live trade', {
       tradeId: trade.id,
       market: trade.market,

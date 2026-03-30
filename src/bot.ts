@@ -96,6 +96,11 @@ class PolymarketCopyBot {
     }
 
     try {
+      console.log(`\n📊 PROCESSING TRADE: ${trade.id}`);
+      console.log(`   Trader: ${trade.trader}`);
+      console.log(`   Market: ${trade.market}`);
+      console.log(`   Side: ${trade.side} | Size: ${trade.size} | Price: $${trade.price}`);
+      
       logger.info('Processing new trade', {
         tradeId: trade.id,
         trader: trade.trader,
@@ -116,6 +121,7 @@ class PolymarketCopyBot {
       const riskLimits = await this.riskManager.canTakeTrade(trade);
 
       if (!riskLimits.canTrade) {
+        console.log(`   ❌ REJECTED by risk manager: ${riskLimits.reason}`);
         logger.info('Trade rejected by risk manager', {
           tradeId: trade.id,
           reason: riskLimits.reason,
@@ -137,6 +143,7 @@ class PolymarketCopyBot {
       await this.tradeLogger.logCopyDecision(trade, validation);
 
       if (!validation.shouldCopy) {
+        console.log(`   ❌ REJECTED by validation: ${validation.reason}`);
         logger.info('Trade validation failed', {
           tradeId: trade.id,
           reason: validation.reason,
@@ -145,6 +152,9 @@ class PolymarketCopyBot {
         return;
       }
 
+      console.log(`   ✅ VALIDATION PASSED - Executing trade...`);
+      console.log(`   Position Size: ${positionSize.toFixed(2)} | Value: $${(positionSize * trade.price).toFixed(2)}`);
+      
       logger.info('Trade passed all checks, executing...', {
         tradeId: trade.id,
         positionSize: positionSize.toFixed(2),
@@ -155,12 +165,18 @@ class PolymarketCopyBot {
       await this.tradeLogger.logExecution(trade, executionResult);
 
       if (executionResult.success) {
+        console.log(`   ✨ TRADE COPIED SUCCESSFULLY!`);
+        console.log(`   Order ID: ${executionResult.orderId}`);
+        console.log(`   Position ID: ${executionResult.positionId}\n`);
+        
         logger.info('Trade copied successfully!', {
           tradeId: trade.id,
           orderId: executionResult.orderId,
           positionId: executionResult.positionId,
         });
       } else {
+        console.log(`   ❌ EXECUTION FAILED: ${executionResult.error}\n`);
+        
         logger.error('Trade execution failed', {
           tradeId: trade.id,
           error: executionResult.error,
@@ -230,11 +246,14 @@ class PolymarketCopyBot {
 
   async start(): Promise<void> {
     try {
+      console.log('\n\u2705 BOT STARTING...\n');
       logger.info('Starting bot...');
 
       await this.initialize();
       await this.statsServer.start();
       await this.tradeMonitor.start();
+      
+      console.log('\n\u2728 BOT IS NOW RUNNING AND MONITORING FOR TRADES!\n');
 
       setInterval(async () => {
         const health = await this.healthChecker.checkHealth();

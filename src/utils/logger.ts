@@ -28,31 +28,41 @@ const consoleFormat = winston.format.combine(
   })
 );
 
-const logger = winston.createLogger({
-  level: LOG_LEVEL,
-  format: logFormat,
-  transports: [
+const transports: winston.transport[] = [
+  // Always add console transport so logs are visible in Render/production
+  new winston.transports.Console({
+    format: consoleFormat,
+  }),
+];
+
+// Only add file transports if we can write to the filesystem
+// (may not be available in some cloud environments)
+try {
+  transports.push(
     new winston.transports.File({
       filename: path.join(LOG_DIR, 'error.log'),
       level: 'error',
       maxsize: 10 * 1024 * 1024,
       maxFiles: 5,
-    }),
+    })
+  );
+  transports.push(
     new winston.transports.File({
       filename: path.join(LOG_DIR, LOG_FILE),
       maxsize: 20 * 1024 * 1024,
       maxFiles: 10,
-    }),
-  ],
-});
-
-if (process.env.NODE_ENV !== 'production') {
-  logger.add(
-    new winston.transports.Console({
-      format: consoleFormat,
     })
   );
+} catch (error) {
+  // If file logging fails, just use console
+  console.warn('File logging disabled (no write access)');
 }
+
+const logger = winston.createLogger({
+  level: LOG_LEVEL,
+  format: logFormat,
+  transports,
+});
 
 export class Logger {
   private context?: string;

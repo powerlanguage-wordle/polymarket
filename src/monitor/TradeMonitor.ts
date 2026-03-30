@@ -48,11 +48,13 @@ export class TradeMonitor extends EventEmitter {
     this.isRunning = true;
 
     if (this.config.execution.useWebSocket) {
+      console.log(`🔌 Starting trade monitor with WebSocket for ${this.config.trackedTraders.length} traders...`);
       logger.info('Starting trade monitor with WebSocket', {
         trackedTraders: this.config.trackedTraders.length,
       });
       this.startWebSocketMonitoring();
     } else {
+      console.log(`🔄 Starting trade monitor with POLLING (${this.config.execution.pollInterval}ms) for ${this.config.trackedTraders.length} traders...`);
       logger.info('Starting trade monitor with polling', {
         trackedTraders: this.config.trackedTraders.length,
         pollInterval: this.config.execution.pollInterval,
@@ -111,6 +113,7 @@ export class TradeMonitor extends EventEmitter {
     if (normalizedTrade) {
       this.cache.set(rawTrade.id, true);
       this.emit('newTrade', normalizedTrade);
+      console.log(`🔔 NEW TRADE DETECTED (WebSocket): ${normalizedTrade.trader.substring(0, 10)}... | ${normalizedTrade.market} | ${normalizedTrade.side} ${normalizedTrade.size} @ $${normalizedTrade.price}`);
       logger.info('New trade detected via WebSocket', {
         tradeId: normalizedTrade.id,
         trader: normalizedTrade.trader,
@@ -147,6 +150,8 @@ export class TradeMonitor extends EventEmitter {
   }
 
   private async poll(): Promise<void> {
+    const timestamp = new Date().toISOString();
+    console.log(`🔍 [${timestamp}] Polling for new trades from ${this.config.trackedTraders.length} tracked traders...`);
     logger.debug('Polling for new trades...');
 
     try {
@@ -174,6 +179,7 @@ export class TradeMonitor extends EventEmitter {
         if (normalizedTrade) {
           this.cache.set(rawTrade.id, true);
           this.emit('newTrade', normalizedTrade);
+          console.log(`🔔 NEW TRADE DETECTED (Polling): ${normalizedTrade.trader.substring(0, 10)}... | ${normalizedTrade.market} | ${normalizedTrade.side} ${normalizedTrade.size} @ $${normalizedTrade.price}`);
           logger.info('New trade detected', {
             tradeId: normalizedTrade.id,
             trader: normalizedTrade.trader,
