@@ -3,7 +3,7 @@
     "0x9d84ce0306f8551e02efef1680475fc0f1dc1344"
   ],
   "riskParams": {
-    "minTradeSize": 100,
+    "minTradeSize": 1,
     "maxCapitalPerTrade": 0.05,
     "maxSlippage": 0.05,
     "maxPositions": 10,

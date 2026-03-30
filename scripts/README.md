@@ -13,7 +13,44 @@ Automatically generates Polymarket API credentials from your wallet's private ke
 npm run setup
 ```
 
+### 2. Reset Paper Trading (`reset-paper-trading.ts`)
+
+Clears all paper trading data to start fresh.
+
+**Usage:**
+```bash
+npm run reset
+```
+
 **What It Does:**
+- Deletes all positions (open and closed)
+- Deletes all execution logs
+- Deletes all copy decisions
+- Marks all trades as unprocessed
+
+**Note:** Requires confirmation before proceeding. Uses transactions to ensure data integrity.
+
+### 3. Check Trade Status (`check-trades.ts`)
+
+Displays a summary of trade processing activity.
+
+**Usage:**
+```bash
+npm run status
+```
+
+**What It Shows:**
+- Total trades logged
+- Processed vs unprocessed trades
+- Copy decision breakdown (why trades were copied or skipped)
+- Recent trade decisions
+- Position summary with PnL
+
+---
+
+## Detailed Documentation
+
+### API Credential Setup
 
 According to Polymarket's [authentication documentation](https://docs.polymarket.com/api-reference/authentication), the API uses a two-level authentication system:
 

@@ -10,6 +10,7 @@
     "dev": "ts-node src/bot.ts",
     "setup": "ts-node scripts/setup-api-credentials.ts",
     "reset": "ts-node scripts/reset-paper-trading.ts",
+    "status": "ts-node scripts/check-trades.ts",
     "test": "jest",
     "test:watch": "jest --watch",
     "lint": "eslint src/**/*.ts",
