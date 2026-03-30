@@ -20,13 +20,11 @@ const ConfigSchema = z.object({
     pollInterval: z.number().int().positive(),
     retryAttempts: z.number().int().min(0),
     retryDelayMs: z.number().int().positive(),
-    useWebSocket: z.boolean().default(true),
   }),
   polymarket: z.object({
     clobApiUrl: z.string().url(),
     chainId: z.number().int(),
     feeRateBps: z.number().int().min(0),
-    wsUrl: z.string().url(),
   }),
   logging: z.object({
     level: z.enum(['error', 'warn', 'info', 'debug']),

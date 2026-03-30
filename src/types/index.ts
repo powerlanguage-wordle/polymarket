@@ -67,13 +67,11 @@ export interface Config {
     pollInterval: number;
     retryAttempts: number;
     retryDelayMs: number;
-    useWebSocket: boolean;
   };
   polymarket: {
     clobApiUrl: string;
     chainId: number;
     feeRateBps: number;
-    wsUrl: string;
   };
   logging: {
     level: string;

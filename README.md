@@ -80,16 +80,14 @@ Polymarket uses a two-level authentication system. You need to derive API creden
   },
   "execution": {
     "mode": "paper",               // "paper" or "live"
-    "pollInterval": 15000,         // Poll every 15 seconds (used as fallback)
+    "pollInterval": 15000,         // Poll every 15 seconds
     "retryAttempts": 3,
-    "retryDelayMs": 1000,
-    "useWebSocket": true           // Use WebSocket for real-time updates (recommended)
+    "retryDelayMs": 1000
   },
   "polymarket": {
     "clobApiUrl": "https://clob.polymarket.com",
     "chainId": 137,
-    "feeRateBps": 200,
-    "wsUrl": "wss://ws-subscriptions-clob.polymarket.com/trades"
+    "feeRateBps": 200
   }
 }
 ```
@@ -385,8 +383,8 @@ The bot enforces:
 
 ### No trades detected
 - Verify tracked trader addresses are correct and active
-- Check poll interval isn't too long
-- Ensure API connectivity
+- Check poll interval isn't too long (15-30s recommended)
+- Ensure API connectivity to Polymarket CLOB API
 
 ### Trades rejected
 - Review validation logs in database

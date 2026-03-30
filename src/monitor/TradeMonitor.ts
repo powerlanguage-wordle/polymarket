@@ -47,49 +47,12 @@ export class TradeMonitor extends EventEmitter {
 
     this.isRunning = true;
 
-    if (this.config.execution.useWebSocket) {
-      console.log(`🔌 Starting trade monitor with WebSocket for ${this.config.trackedTraders.length} traders...`);
-      logger.info('Starting trade monitor with WebSocket', {
-        trackedTraders: this.config.trackedTraders.length,
-      });
-      this.startWebSocketMonitoring();
-    } else {
-      console.log(`🔄 Starting trade monitor with POLLING (${this.config.execution.pollInterval}ms) for ${this.config.trackedTraders.length} traders...`);
-      logger.info('Starting trade monitor with polling', {
-        trackedTraders: this.config.trackedTraders.length,
-        pollInterval: this.config.execution.pollInterval,
-      });
-      this.startPollingMonitoring();
-    }
-  }
-
-  private startWebSocketMonitoring(): void {
-    // Listen to WebSocket trade events
-    this.client.on('trade', (rawTrade: any) => {
-      this.handleWebSocketTrade(rawTrade);
+    console.log(`🔄 Starting trade monitor with POLLING (${this.config.execution.pollInterval}ms) for ${this.config.trackedTraders.length} traders...`);
+    logger.info('Starting trade monitor with polling', {
+      trackedTraders: this.config.trackedTraders.length,
+      pollInterval: this.config.execution.pollInterval,
     });
 
-    // Handle WebSocket connection events
-    this.client.on('connected', () => {
-      logger.info('WebSocket connected, subscribing to traders');
-      // Subscribe to all tracked traders
-      for (const traderAddress of this.config.trackedTraders) {
-        this.client.subscribeToTrader(traderAddress);
-      }
-    });
-
-    this.client.on('disconnected', () => {
-      logger.error('WebSocket disconnected and unable to reconnect');
-      // Fall back to polling
-      logger.info('Falling back to polling mode');
-      this.startPollingMonitoring();
-    });
-
-    // Connect the WebSocket
-    this.client.connectWebSocket();
-  }
-
-  private startPollingMonitoring(): void {
     // Initial poll
     this.poll().catch((error) => {
       logger.error('Error in initial poll', { error: error.message });
@@ -103,28 +66,6 @@ export class TradeMonitor extends EventEmitter {
     }, this.config.execution.pollInterval);
   }
 
-  private handleWebSocketTrade(rawTrade: any): void {
-    if (this.isDuplicate(rawTrade.id)) {
-      return;
-    }
-
-    const normalizedTrade = this.normalizer.normalize(rawTrade);
-
-    if (normalizedTrade) {
-      this.cache.set(rawTrade.id, true);
-      this.emit('newTrade', normalizedTrade);
-      console.log(`🔔 NEW TRADE DETECTED (WebSocket): ${normalizedTrade.trader.substring(0, 10)}... | ${normalizedTrade.market} | ${normalizedTrade.side} ${normalizedTrade.size} @ $${normalizedTrade.price}`);
-      logger.info('New trade detected via WebSocket', {
-        tradeId: normalizedTrade.id,
-        trader: normalizedTrade.trader,
-        market: normalizedTrade.market,
-        side: normalizedTrade.side,
-        size: normalizedTrade.size,
-        price: normalizedTrade.price,
-      });
-    }
-  }
-
   stop(): void {
     if (!this.isRunning) {
       return;
@@ -132,18 +73,9 @@ export class TradeMonitor extends EventEmitter {
 
     this.isRunning = false;
 
-    // Stop polling if active
     if (this.pollIntervalId) {
       clearInterval(this.pollIntervalId);
       this.pollIntervalId = undefined;
-    }
-
-    // Disconnect WebSocket if active
-    if (this.config.execution.useWebSocket) {
-      this.client.removeAllListeners('trade');
-      this.client.removeAllListeners('connected');
-      this.client.removeAllListeners('disconnected');
-      this.client.disconnectWebSocket();
     }
 
     logger.info('Trade monitor stopped');
