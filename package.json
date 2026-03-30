@@ -9,6 +9,7 @@
     "start": "node dist/bot.js",
     "dev": "ts-node src/bot.ts",
     "setup": "ts-node scripts/setup-api-credentials.ts",
+    "reset": "ts-node scripts/reset-paper-trading.ts",
     "test": "jest",
     "test:watch": "jest --watch",
     "lint": "eslint src/**/*.ts",

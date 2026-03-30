@@ -153,6 +153,13 @@ npm start
 3. Review positions via the web dashboard at http://localhost:3001
 4. Analyze performance and validation decisions
 
+#### Reset Paper Trading Data
+To start fresh with a clean slate (useful for testing or strategy changes):
+```bash
+npm run reset
+```
+This will delete all positions, execution logs, and copy decisions while keeping trade history for reference.
+
 ### Live Trading (⚠️ Real Money)
 1. Ensure paper trading performs as expected
 2. Add API credentials to `.env`

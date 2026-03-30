@@ -1,8 +1,19 @@
-# API Credential Setup Script
+# Scripts
 
-This script automatically generates Polymarket API credentials from your wallet's private key.
+This directory contains utility scripts for managing the Polymarket Copy Trading Bot.
 
-## What It Does
+## Available Scripts
+
+### 1. API Credential Setup (`setup-api-credentials.ts`)
+
+Automatically generates Polymarket API credentials from your wallet's private key.
+
+**Usage:**
+```bash
+npm run setup
+```
+
+**What It Does:**
 
 According to Polymarket's [authentication documentation](https://docs.polymarket.com/api-reference/authentication), the API uses a two-level authentication system:
 
@@ -11,9 +22,9 @@ According to Polymarket's [authentication documentation](https://docs.polymarket
 
 This script uses your private key to derive the L2 API credentials through Polymarket's CLOB API.
 
-## Usage
+**Options:**
 
-### Option 1: Using .env file (Recommended)
+**Option A: Using .env file (Recommended)**
 
 1. Add your private key to `.env`:
    ```bash
@@ -31,7 +42,7 @@ This script uses your private key to derive the L2 API credentials through Polym
    - Display the credentials
    - Optionally update your `.env` file automatically
 
-### Option 2: Manual entry
+**Option B: Manual entry**
 
 1. Run the setup script without a private key in `.env`:
    ```bash
@@ -42,20 +53,60 @@ This script uses your private key to derive the L2 API credentials through Polym
 
 3. The script will generate and display your credentials
 
-## What You Get
+### 2. Reset Paper Trading (`reset-paper-trading.ts`)
 
-After running the script, you'll receive three credentials:
+Resets all paper trading data to start fresh with a clean slate.
 
-- **API Key** - Public identifier for your API access
-- **Secret** - Used to sign API requests (keep secure!)
-- **Passphrase** - Additional authentication factor
-
-These credentials are automatically added to your `.env` file:
-
+**Usage:**
 ```bash
-POLYMARKET_API_KEY=550e8400-e29b-41d4-a716-446655440000
-POLYMARKET_API_SECRET=base64EncodedSecretString==
-POLYMARKET_API_PASSPHRASE=randomPassphraseString
+npm run reset
+```
+
+**What It Deletes:**
+- ✅ All positions (open and closed)
+- ✅ All execution logs
+- ✅ All copy decisions
+- ✅ Marks all trades as unprocessed
+
+**When To Use:**
+- Starting fresh with paper trading
+- Testing different strategies
+- After changing configuration settings
+- After major code changes
+
+**Safety Features:**
+- Requires confirmation before deleting
+- Uses database transactions (all-or-nothing)
+- Rolls back on error
+- Only affects paper trading data (keeps trade history for reference)
+
+**Example:**
+```bash
+$ npm run reset
+
+🔄 RESET PAPER TRADING DATA
+
+⚠️  This will DELETE the following data:
+   - All positions (open and closed)
+   - All execution logs
+   - All copy decisions
+   - Mark all trades as unprocessed
+
+📝 This is useful for:
+   - Starting fresh with paper trading
+   - Testing different strategies
+   - Resetting after configuration changes
+
+Are you sure you want to reset? (yes/no): yes
+
+🗑️  Deleting old data...
+   ✅ Deleted 15 positions
+   ✅ Deleted 23 execution logs
+   ✅ Deleted 45 copy decisions
+   ✅ Reset 50 trades to unprocessed
+
+✨ Paper trading data has been reset successfully!
+   You can now restart the bot with a clean slate.
 ```
 
 ## Security Notes
@@ -63,48 +114,52 @@ POLYMARKET_API_PASSPHRASE=randomPassphraseString
 ⚠️ **Important:**
 - Never commit your `.env` file to version control
 - Keep your private key secure
-- The script only communicates with Polymarket's official API
+- Scripts only communicate with official Polymarket APIs
 - Your private key never leaves your machine
-- API credentials are derived deterministically (running the script multiple times with the same key returns the same credentials)
+- API credentials are derived deterministically
 
 ## Troubleshooting
 
-### "Invalid private key"
-Ensure your private key:
-- Starts with `0x` (the script will add it if missing)
-- Is 64 hexadecimal characters (+ 0x prefix)
+### API Setup Issues
 
-### "Network error"
-Check your internet connection. The script needs to connect to:
-- `https://clob.polymarket.com` (Polymarket CLOB API)
+**"Invalid private key"**
+- Ensure your private key starts with `0x`
+- Must be 64 hexadecimal characters (+ 0x prefix)
 
-### "Failed to derive credentials"
-- Verify your private key is correct
-- Ensure you have network connectivity
-- Try again in a few moments (API might be temporarily unavailable)
+**"Network error"**
+- Check your internet connection
+- Verify `https://clob.polymarket.com` is accessible
 
-## Next Steps
+### Reset Issues
 
-After obtaining your API credentials:
+**"Connection error"**
+- Check your `DATABASE_URL` in `.env`
+- Ensure database is running and accessible
 
-1. Verify they're in your `.env` file
-2. Set `EXECUTION_MODE=live` in `.env` or `"mode": "live"` in `config.json`
-3. Start the bot: `npm start`
+**"Transaction failed"**
+- Database connection interrupted
+- Data will NOT be deleted (automatic rollback)
 
 ## Technical Details
 
-The script uses:
-- `@polymarket/clob-client` - Official Polymarket CLOB client
-- `ethers` - Ethereum wallet management
+### API Credential Derivation
+- Uses `@polymarket/clob-client` - Official Polymarket CLOB client
+- Uses `ethers` - Ethereum wallet management
 - EIP-712 signing for authentication
 
-The credential derivation process:
+Process:
 1. Creates an ethers Wallet from your private key
 2. Initializes ClobClient with the wallet
 3. Calls `createOrDeriveApiKey()` which:
    - Signs an EIP-712 message with your private key
    - Sends it to Polymarket's `/auth/derive-api-key` endpoint
    - Receives deterministic API credentials based on your wallet address
+
+### Reset Process
+- Uses PostgreSQL transactions for safety
+- Deletes data in correct order (respects foreign keys)
+- Automatic rollback on any error
+- Requires explicit confirmation
 
 ## References
 
