@@ -383,7 +383,7 @@ The bot enforces:
 
 ### No trades detected
 - Verify tracked trader addresses are correct and active
-- Check poll interval isn't too long (15-30s recommended)
+- Check poll interval isn't too long (5-30s depending on your needs)
 - Ensure API connectivity to Polymarket CLOB API
 
 ### Trades rejected
@@ -403,7 +403,10 @@ The bot enforces:
 
 ## 📈 Performance Tips
 
-1. **Optimize Poll Interval** - Balance latency vs API rate limits (10-30s recommended)
+1. **Optimize Poll Interval** - Balance latency vs API rate limits
+   - **5-10s**: Fast detection, good for 1-3 traders
+   - **10-20s**: Balanced, recommended for most use cases  
+   - **20-30s**: Conservative, good for many traders or API limits
 2. **Selective Traders** - Track only proven profitable traders
 3. **Size Filters** - Skip small trades to reduce noise
 4. **Market Selection** - Focus on liquid markets
