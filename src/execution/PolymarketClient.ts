@@ -333,8 +333,10 @@ export class PolymarketClient extends EventEmitter {
       const trades = await this.client.getTrades({ maker_address: makerAddress }, true);
       console.log(`   \u2139\ufe0f Found ${trades.length} trades for this trader`);
       
-      if (trades.length > 0) {
-        console.log(`   \ud83d\udd50 Most recent trade timestamp: ${new Date(trades[0].timestamp * 1000).toISOString()}`);
+      if (trades.length > 0 && trades[0]) {
+        const firstTrade = trades[0] as any;
+        const timestamp = firstTrade.timestamp || firstTrade.created_at || Date.now() / 1000;
+        console.log(`   🕐 Most recent trade timestamp: ${new Date(timestamp * 1000).toISOString()}`);
       }
       
       return trades.slice(0, limit);
