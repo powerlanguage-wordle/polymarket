@@ -13,11 +13,14 @@ export class LiquidityChecker {
 
   async validate(trade: Trade, positionSize: number): Promise<{ valid: boolean; reason?: string }> {
     try {
-      const orderBook = await this.fetchOrderBook(trade.market, trade.outcome);
+      // Use trade.asset (token ID) not trade.outcome ("Yes"/"No")
+      const tokenId = trade.asset || trade.outcome;
+      const orderBook = await this.fetchOrderBook(trade.market, tokenId);
 
       if (!orderBook) {
         logger.warn('Could not fetch order book', {
           market: trade.market,
+          tokenId,
           outcome: trade.outcome,
         });
         return {
@@ -60,10 +63,10 @@ export class LiquidityChecker {
 
   private async fetchOrderBook(
     market: string,
-    outcome: string
+    tokenId: string
   ): Promise<OrderBookSnapshot | null> {
     try {
-      const url = `${this.config.polymarket.clobApiUrl}/book?token_id=${outcome}`;
+      const url = `${this.config.polymarket.clobApiUrl}/book?token_id=${tokenId}`;
 
       const response = await fetch(url, {
         method: 'GET',
@@ -80,7 +83,7 @@ export class LiquidityChecker {
 
       return {
         market,
-        outcome,
+        outcome: tokenId,
         bids: data.bids?.map((b: { price: string; size: string }) => ({
           price: parseFloat(b.price),
           size: parseFloat(b.size),
@@ -94,7 +97,7 @@ export class LiquidityChecker {
     } catch (error) {
       logger.error('Failed to fetch order book', {
         market,
-        outcome,
+        tokenId,
         error: error instanceof Error ? error.message : String(error),
       });
       return null;

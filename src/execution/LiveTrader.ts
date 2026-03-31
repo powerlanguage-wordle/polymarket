@@ -32,7 +32,9 @@ export class LiveTrader {
 
     while (attempt < this.config.execution.retryAttempts) {
       try {
-        const result = await this.client.placeOrder(trade.outcome, trade.side, trade.price, positionSize);
+        // Use trade.asset (token ID) for order placement
+        const tokenId = trade.asset || trade.outcome;
+        const result = await this.client.placeOrder(tokenId, trade.side, trade.price, positionSize);
 
         if (result.success && result.orderId) {
           const positionId = `POS-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;

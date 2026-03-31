@@ -14,11 +14,14 @@ export class SlippageValidator {
 
   async validate(trade: Trade): Promise<{ valid: boolean; reason?: string }> {
     try {
-      const currentPrice = await this.fetchCurrentPrice(trade.market, trade.outcome);
+      // Use trade.asset (token ID) not trade.outcome ("Yes"/"No")
+      const tokenId = trade.asset || trade.outcome;
+      const currentPrice = await this.fetchCurrentPrice(trade.market, tokenId);
 
       if (currentPrice === null) {
         logger.warn('Could not fetch current price', {
           market: trade.market,
+          tokenId,
           outcome: trade.outcome,
         });
 
@@ -64,9 +67,9 @@ export class SlippageValidator {
     }
   }
 
-  private async fetchCurrentPrice(market: string, outcome: string): Promise<number | null> {
+  private async fetchCurrentPrice(market: string, tokenId: string): Promise<number | null> {
     try {
-      const url = `${this.config.polymarket.clobApiUrl}/midpoint?token_id=${outcome}`;
+      const url = `${this.config.polymarket.clobApiUrl}/midpoint?token_id=${tokenId}`;
 
       const response = await fetch(url, {
         method: 'GET',
@@ -90,7 +93,7 @@ export class SlippageValidator {
     } catch (error) {
       logger.error('Failed to fetch current price', {
         market,
-        outcome,
+        tokenId,
         error: error instanceof Error ? error.message : String(error),
       });
       return null;
