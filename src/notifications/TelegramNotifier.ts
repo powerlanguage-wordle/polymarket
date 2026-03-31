@@ -43,24 +43,65 @@ export class TelegramNotifier {
       // Create Telegraf bot instance
       this.bot = new Telegraf(botToken);
       
+      // IMPORTANT: Delete webhook first to avoid conflicts
+      try {
+        console.log('   🔄 Clearing webhook and pending updates...');
+        await this.bot.telegram.deleteWebhook({ drop_pending_updates: true });
+        logger.info('Webhook cleared successfully');
+        
+        // Wait a moment for Telegram to fully clear
+        await new Promise(resolve => setTimeout(resolve, 1500));
+      } catch (error) {
+        logger.warn('Could not clear webhook', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+      
       // Set up command handlers
       this.setupCommands();
       
-      // Launch bot and wait for it to be ready
-      await this.bot.launch({
-        dropPendingUpdates: true, // This automatically clears pending updates
-      });
+      // Launch bot with retries
+      let retries = 3;
+      let lastError: Error | null = null;
       
-      this.enabled = true;
-      console.log('   ✅ Telegram bot ready (/summary, /positions, /help)');
-      logger.info('Telegram bot launched successfully');
+      while (retries > 0) {
+        try {
+          await this.bot.launch({
+            dropPendingUpdates: true,
+          });
+          
+          this.enabled = true;
+          console.log('   ✅ Telegram bot ready (/summary, /positions, /help)');
+          logger.info('Telegram bot launched successfully');
+          
+          // Enable graceful stop
+          process.once('SIGINT', () => this.stop());
+          process.once('SIGTERM', () => this.stop());
+          
+          return; // Success!
+          
+        } catch (error) {
+          lastError = error as Error;
+          retries--;
+          
+          if (retries > 0) {
+            const waitTime = (4 - retries) * 2000; // 2s, 4s, 6s
+            logger.warn(`Telegram launch failed, retrying in ${waitTime/1000}s...`, {
+              error: error instanceof Error ? error.message : String(error),
+              retriesLeft: retries,
+            });
+            console.log(`   ⚠️  Conflict detected, retrying in ${waitTime/1000}s... (${retries} attempts left)`);
+            await new Promise(resolve => setTimeout(resolve, waitTime));
+          }
+        }
+      }
       
-      // Enable graceful stop
-      process.once('SIGINT', () => this.stop());
-      process.once('SIGTERM', () => this.stop());
+      // All retries failed
+      throw lastError || new Error('Failed to launch Telegram bot');
       
     } catch (error) {
       console.log('   ❌ Failed to launch Telegram bot');
+      console.log('   💡 Run: npm run fix:telegram to resolve conflicts');
       logger.error('Failed to launch Telegram bot', {
         error: error instanceof Error ? error.message : String(error),
       });
