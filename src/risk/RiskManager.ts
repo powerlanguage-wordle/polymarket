@@ -23,6 +23,18 @@ export class RiskManager {
   }
 
   async canTakeTrade(trade: Trade): Promise<RiskLimits> {
+    // Check for invalid price first
+    if (!trade.price || trade.price <= 0) {
+      logger.warn('Trade has invalid price', {
+        tradeId: trade.id,
+        price: trade.price,
+      });
+      return {
+        canTrade: false,
+        reason: 'Current price unavailable',
+      };
+    }
+
     const openPositions = await this.db.getOpenPositions();
 
     if (openPositions.length >= this.config.riskParams.maxPositions) {
@@ -39,7 +51,11 @@ export class RiskManager {
     const allocatedCapital = await this.capitalCalculator.calculateAllocationForTrade();
 
     if (allocatedCapital <= 0) {
-      logger.warn('No capital available for trading', { tradeId: trade.id });
+      logger.warn('No capital available for trading', { 
+        tradeId: trade.id,
+        totalCapital: this.capitalCalculator.getTotalCapital(),
+        openPositions: openPositions.length,
+      });
       return {
         canTrade: false,
         reason: 'Insufficient capital available',
@@ -49,10 +65,32 @@ export class RiskManager {
     const positionSize = this.positionSizer.calculatePositionSize(trade, allocatedCapital);
 
     if (positionSize <= 0) {
-      logger.warn('Calculated position size is zero', { tradeId: trade.id });
+      logger.warn('Calculated position size is zero or negative', { 
+        tradeId: trade.id,
+        allocatedCapital: allocatedCapital.toFixed(2),
+        price: trade.price,
+      });
       return {
         canTrade: false,
-        reason: 'Position size too small',
+        reason: 'Position size too small (insufficient capital or invalid price)',
+      };
+    }
+
+    // Check if position size meets minimum requirements
+    const minTradeSize = this.config.riskParams.minTradeSize;
+    if (positionSize < minTradeSize) {
+      const requiredCapital = minTradeSize * trade.price;
+      logger.warn('Position size below minimum', { 
+        tradeId: trade.id,
+        positionSize: positionSize.toFixed(4),
+        minTradeSize,
+        allocatedCapital: allocatedCapital.toFixed(2),
+        requiredCapital: requiredCapital.toFixed(2),
+        price: trade.price,
+      });
+      return {
+        canTrade: false,
+        reason: `Position size ${positionSize.toFixed(2)} below minimum ${minTradeSize} (need $${requiredCapital.toFixed(2)}, have $${allocatedCapital.toFixed(2)})`,
       };
     }
 

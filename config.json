@@ -13,7 +13,11 @@
     "mode": "paper",
     "pollInterval": 5000,
     "retryAttempts": 3,
-    "retryDelayMs": 1000
+    "retryDelayMs": 1000,
+    "tradeAggregation": {
+      "enabled": true,
+      "windowMs": 30000
+    }
   },
   "polymarket": {
     "clobApiUrl": "https://clob.polymarket.com",

@@ -43,12 +43,13 @@ export class ValidationPipeline {
       };
     }
 
-    const sizeCheck = this.sizeValidator.validate(trade);
+    const sizeCheck = this.sizeValidator.validate(trade, positionSize);
     checks.sizeThreshold = sizeCheck.valid;
     if (!sizeCheck.valid) {
       logger.info('Trade rejected: size threshold', {
         tradeId: trade.id,
-        size: trade.size,
+        originalSize: trade.size,
+        positionSize: positionSize,
       });
       return {
         shouldCopy: false,

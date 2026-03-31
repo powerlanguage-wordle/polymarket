@@ -10,19 +10,37 @@ export class SizeValidator {
     this.minTradeSize = config.riskParams.minTradeSize;
   }
 
-  validate(trade: Trade): { valid: boolean; reason?: string } {
-    const tradeValue = trade.size * trade.price;
+  validate(trade: Trade, positionSize?: number): { valid: boolean; reason?: string } {
+    // If positionSize is provided, validate it instead of the original trade size
+    // This ensures we're checking OUR calculated size, not the tracked trader's size
+    const sizeToCheck = positionSize !== undefined ? positionSize : trade.size;
+    const priceToUse = trade.price;
 
-    if (trade.size < this.minTradeSize) {
-      logger.debug('Trade size below threshold', {
+    // Check for invalid price
+    if (priceToUse <= 0) {
+      logger.debug('Trade price invalid or unavailable', {
         tradeId: trade.id,
-        size: trade.size,
+        price: priceToUse,
+      });
+
+      return {
+        valid: false,
+        reason: 'Current price unavailable',
+      };
+    }
+
+    const tradeValue = sizeToCheck * priceToUse;
+
+    if (sizeToCheck < this.minTradeSize) {
+      logger.debug('Position size below threshold', {
+        tradeId: trade.id,
+        positionSize: sizeToCheck,
         minSize: this.minTradeSize,
       });
 
       return {
         valid: false,
-        reason: `Trade size ${trade.size} is below minimum ${this.minTradeSize}`,
+        reason: `Trade size ${sizeToCheck.toFixed(2)} is below minimum ${this.minTradeSize}`,
       };
     }
 

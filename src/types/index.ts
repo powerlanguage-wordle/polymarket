@@ -67,6 +67,10 @@ export interface Config {
     pollInterval: number;
     retryAttempts: number;
     retryDelayMs: number;
+    tradeAggregation?: {
+      enabled: boolean;
+      windowMs: number;
+    };
   };
   polymarket: {
     clobApiUrl: string;

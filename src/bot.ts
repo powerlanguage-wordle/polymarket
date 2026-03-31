@@ -45,6 +45,10 @@ class PolymarketCopyBot {
     const databaseUrl = configManager.getDatabaseUrl();
     this.db = await createDatabase(databaseUrl);
 
+    // Get total capital from environment or use default
+    const totalCapital = process.env.TOTAL_CAPITAL ? parseFloat(process.env.TOTAL_CAPITAL) : 10000;
+    logger.info('Total capital configured', { totalCapital: totalCapital.toFixed(2) });
+
     // Create ClobClient for both paper and live modes (needed for trade monitoring)
     const apiKey = configManager.getApiKey();
     const apiSecret = configManager.getApiSecret();
@@ -54,7 +58,7 @@ class PolymarketCopyBot {
 
     this.tradeMonitor = new TradeMonitor(config, polymarketClient);
     this.validationPipeline = new ValidationPipeline(config);
-    this.riskManager = new RiskManager(config, this.db, 10000);
+    this.riskManager = new RiskManager(config, this.db, totalCapital);
     this.positionManager = new PositionManager(this.db);
     this.tradeLogger = new TradeLogger(this.db);
     this.healthChecker = new HealthChecker();

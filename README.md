@@ -5,6 +5,7 @@ A production-ready automated trading bot that monitors selected Polymarket trade
 ## 🚀 Features
 
 - **Real-time Trade Monitoring** - WebSocket integration for instant trade detection with polling fallback
+- **Trade Aggregation** - Automatically combines partial fills into single trades
 - **Web Dashboard** - Built-in UI for viewing portfolio stats, positions, and PnL in real-time
 - **Multi-stage Validation** - Whitelist, size threshold, liquidity, and slippage checks
 - **Smart Risk Management** - 2-5% capital per trade, max exposure limits, position sizing
@@ -82,7 +83,11 @@ Polymarket uses a two-level authentication system. You need to derive API creden
     "mode": "paper",               // "paper" or "live"
     "pollInterval": 15000,         // Poll every 15 seconds
     "retryAttempts": 3,
-    "retryDelayMs": 1000
+    "retryDelayMs": 1000,
+    "tradeAggregation": {          // Optional: aggregate partial fills
+      "enabled": true,             // Combine trades within time window
+      "windowMs": 30000            // 30-second aggregation window
+    }
   },
   "polymarket": {
     "clobApiUrl": "https://clob.polymarket.com",
@@ -167,11 +172,53 @@ This will delete all positions, execution logs, and copy decisions while keeping
 
 ## 📊 How It Works
 
+### Trade Aggregation (Handling Partial Fills)
+
+When traders make large orders on Polymarket, they often get filled across multiple smaller trades (partial fills). The bot's trade aggregation feature automatically combines these partial fills:
+
+**How it works:**
+1. Bot detects individual trades from tracked traders
+2. Trades are grouped by: trader + market + outcome + side
+3. Within a configurable time window (default: 30 seconds), trades in the same group are held
+4. When the window expires, all trades in the group are combined into one:
+   - **Total size**: Sum of all individual trades
+   - **Weighted average price**: Value-weighted average of all prices
+   - **Single execution**: Bot executes one trade instead of many small ones
+
+**Benefits:**
+- ✅ Avoids many tiny trades that waste gas and incur multiple fees
+- ✅ More accurate representation of trader's intent (full order size)
+- ✅ Better capital utilization (one $500 trade vs. five $100 trades)
+- ✅ Reduces validation failures from trades that are individually too small
+
+**Example:**
+```
+Without aggregation:
+  🔔 BUY 50 @ $0.52 → ❌ Rejected (below minimum 100)
+  🔔 BUY 75 @ $0.51 → ❌ Rejected (below minimum 100)
+  🔔 BUY 100 @ $0.53 → ✅ Executed
+
+With aggregation (30s window):
+  📦 [AGGREGATED] BUY 225 @ $0.52 → ✅ Executed (weighted average)
+```
+
+**Configuration:**
+```json
+"tradeAggregation": {
+  "enabled": true,    // Enable/disable aggregation
+  "windowMs": 30000   // Time window in milliseconds (30s default)
+}
+```
+
+Set `enabled: false` to process every trade individually (not recommended for traders who make large orders).
+
 ### Core Loop
 ```
 Monitor Trader Wallets
         ↓
 Detect New Trade
+        ↓
+Trade Aggregation (if enabled)
         ↓
 Normalize Data (market, outcome, price, size)
         ↓
