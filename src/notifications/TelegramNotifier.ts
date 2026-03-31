@@ -74,10 +74,6 @@ export class TelegramNotifier {
           console.log('   ✅ Telegram bot ready (/summary, /positions, /help)');
           logger.info('Telegram bot launched successfully');
           
-          // Enable graceful stop
-          process.once('SIGINT', () => this.stop());
-          process.once('SIGTERM', () => this.stop());
-          
           return; // Success!
           
         } catch (error) {
