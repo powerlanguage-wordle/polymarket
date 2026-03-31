@@ -66,14 +66,7 @@ Edit `.env` - this file should **only contain secrets/credentials**:
 npm run build
 ```
 
-## Step 4: Build the Dashboard
-```bash
-npm run build:dashboard
-```
-
-## Step 5: Run the Bot (includes Dashboard)
-
-The bot includes the dashboard server - everything runs in a single process:
+## Step 4: Run the Bot
 
 ### Development Mode (Recommended for Testing)
 ```bash
@@ -85,22 +78,23 @@ npm run dev
 npm start
 ```
 
-The dashboard will be available at: http://localhost:3001
+The API will be available at: http://localhost:3001/api
 
-## Step 6: Monitor
+## Step 5: Monitor
 
 Watch the logs:
 ```bash
 tail -f logs/bot.log
 ```
 
-**Access the Dashboard**: Open http://localhost:3001 to view:
-- Portfolio summary
-- Open positions
-- Capital allocation
-- Real-time P&L
+**Access the API**: Use curl or your favorite HTTP client to view:
+```bash
+curl http://localhost:3001/api/stats/portfolio  # Portfolio summary
+curl http://localhost:3001/api/stats/positions  # Open positions
+curl http://localhost:3001/api/stats/overview   # Capital allocation
+```
 
-## Step 7: Go Live (when ready)
+## Step 6: Go Live (when ready)
 
 1. Make sure you've run `npm run setup` to generate API credentials
 2. Edit `config.json` and set `"mode": "live"`
@@ -120,13 +114,10 @@ npm test
 # Build TypeScript files
 npm run build
 
-# Build dashboard
-npm run build:dashboard
-
-# Development mode (bot + dashboard)
+# Development mode
 npm run dev
 
-# Production mode (bot + dashboard)
+# Production mode
 npm start
 
 # Lint code

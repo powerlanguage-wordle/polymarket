@@ -64,7 +64,7 @@ class PolymarketCopyBot implements SummaryProvider {
     this.statsServer = new StatsServer(
       this.db, 
       this.riskManager.getCapitalCalculator(),
-      3001,
+      undefined, // Use PORT env var
       config.polymarket.clobApiUrl
     );
     

@@ -6,7 +6,6 @@ A production-ready automated trading bot that monitors selected Polymarket trade
 
 - **Real-time Trade Monitoring** - WebSocket integration for instant trade detection with polling fallback
 - **Trade Aggregation** - Automatically combines partial fills into single trades
-- **Web Dashboard** - Built-in UI for viewing portfolio stats, positions, and PnL in real-time
 - **Multi-stage Validation** - Whitelist, size threshold, liquidity, and slippage checks
 - **Smart Risk Management** - 2-5% capital per trade, max exposure limits, position sizing
 - **Paper Trading Mode** - Test strategies safely before going live
@@ -114,7 +113,6 @@ POLYMARKET_API_PASSPHRASE=your_api_passphrase_here
 # Optional overrides
 EXECUTION_MODE=paper
 POLL_INTERVAL_MS=15000
-DASHBOARD_PORT=3001
 LOG_LEVEL=info
 ```
 
@@ -146,14 +144,13 @@ npm run dev
 ### Build and Run Production
 ```bash
 npm run build
-npm run build:dashboard
 npm start
 ```
 
 ### Paper Trading (Recommended First)
 1. Set `"mode": "paper"` in `config.json`
 2. Run the bot and monitor logs in `logs/bot.log`
-3. Review positions via the web dashboard at http://localhost:3001
+3. Review positions via the API at http://localhost:3001/api/stats/positions
 4. Analyze performance and validation decisions
 
 #### Reset Paper Trading Data
@@ -253,7 +250,7 @@ polymarket/
 ├── src/
 │   ├── bot.ts                    # Main orchestration loop
 │   ├── api/
-│   │   └── StatsServer.ts       # Express web server for dashboard
+│   │   └── StatsServer.ts       # Express API server for stats
 │   ├── config/
 │   │   └── index.ts             # Configuration management
 │   ├── db/
@@ -286,13 +283,6 @@ polymarket/
 │   │   └── logger.ts            # Winston logger
 │   └── types/
 │       └── index.ts             # TypeScript types
-├── dashboard/                   # React web dashboard
-│   ├── src/
-│   │   ├── App.tsx              # Main dashboard UI
-│   │   ├── api/
-│   │   │   └── client.ts        # API client
-│   │   └── components/          # React components
-│   └── dist/                    # Built static files (served by bot)
 ├── test/                        # Jest tests
 ├── logs/                        # Log files
 └── config.json                  # Bot configuration
@@ -320,7 +310,7 @@ The bot uses PostgreSQL with the following tables:
 - **copy_decisions** - Validation results for each trade
 - **execution_log** - Order execution history
 
-**Access via Dashboard**: View positions and stats at http://localhost:3001
+**Access via API**: View positions and stats at http://localhost:3001/api/stats/*
 
 ## 🔍 Monitoring
 
@@ -330,7 +320,7 @@ The bot uses PostgreSQL with the following tables:
 
 ### Health Check Endpoint
 
-**Dashboard/Bot Health Check** (http://localhost:3001):
+**Bot Health Check**:
 ```bash
 curl http://localhost:3001/api/health
 ```
@@ -343,65 +333,27 @@ The bot automatically monitors:
 - Memory usage
 - Database access
 
-## 📊 Web Dashboard
+## 📊 REST API
 
-The bot includes a built-in web dashboard for visualizing your portfolio stats in real-time.
-
-### Features
-- **Portfolio Summary** - Total positions, portfolio value, PnL, and capital utilization
-- **Capital Breakdown** - Visual breakdown of allocated vs. available capital
-- **Market Exposure** - See how much capital is allocated to each market
-- **Positions Table** - Detailed view of all open positions with PnL tracking
-- **Manual Refresh** - Click the refresh button to update stats on demand
-
-### Setup
-
-1. **Build the dashboard** (required before first use):
-   ```bash
-   npm run build:dashboard
-   ```
-
-2. **Start the bot** (includes the dashboard server):
-   ```bash
-   npm run build
-   npm start
-   ```
-
-3. **Access the dashboard**:
-   Open your browser to [http://localhost:3001](http://localhost:3001)
-
-### API Endpoints
-
-The bot exposes the following REST API endpoints on port 3001:
+The bot exposes the following REST API endpoints:
 
 - `GET /api/health` - Server health check
 - `GET /api/stats/portfolio` - Portfolio summary (PnL, positions count, capital utilization)
 - `GET /api/stats/positions` - List all open positions with details
 - `GET /api/stats/overview` - Capital breakdown and market exposure
 
-### Development
+### Example Usage
 
-To develop the dashboard with hot-reload:
 ```bash
-cd dashboard
-npm run dev
+# Get portfolio summary
+curl http://localhost:3001/api/stats/portfolio
+
+# Get all open positions
+curl http://localhost:3001/api/stats/positions
+
+# Get capital overview and market exposure
+curl http://localhost:3001/api/stats/overview
 ```
-
-The Vite dev server will start on port 3000 and proxy API requests to the bot on port 3001.
-
-**Optional**: Override the API URL with an environment variable:
-```bash
-# dashboard/.env
-VITE_API_URL=http://localhost:3001/api
-```
-
-### Deployment
-
-The dashboard is built as static files and served by the bot. API calls use relative URLs (`/api/*`), so it works automatically in any deployment environment:
-
-1. Build the dashboard: `npm run build:dashboard`
-2. The bot serves the dashboard from `dashboard/dist`
-3. All API calls go to the same origin (no CORS issues)
 
 ## ⚠️ Safety & Risk Management
 
@@ -500,8 +452,7 @@ Contributions welcome! Please:
 
 ## 💡 Future Enhancements
 
-- [ ] Web dashboard for monitoring
-- [ ] Telegram/Discord notifications
+- [ ] Telegram/Discord notifications improvements
 - [ ] Advanced position sizing (Kelly Criterion)
 - [ ] Auto-close positions based on PnL
 - [ ] ML-based trader scoring

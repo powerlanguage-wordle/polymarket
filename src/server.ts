@@ -8,7 +8,7 @@ import { RiskManager } from './risk/RiskManager';
 
 const logger = createLogger('Server');
 
-class DashboardServer {
+class ApiServer {
   private statsServer!: StatsServer;
   private db!: Awaited<ReturnType<typeof createDatabase>>;
   private riskManager!: RiskManager;
@@ -16,7 +16,7 @@ class DashboardServer {
   private initialized = false;
 
   constructor() {
-    logger.info('Initializing Dashboard Server...');
+    logger.info('Initializing API Server...');
     this.displayBanner();
   }
 
@@ -32,11 +32,9 @@ class DashboardServer {
     this.riskManager = new RiskManager(config, this.db, 10000);
 
     // Initialize stats server with capital calculator from risk manager
-    const port = process.env.DASHBOARD_PORT ? parseInt(process.env.DASHBOARD_PORT) : 3001;
     this.statsServer = new StatsServer(
       this.db, 
-      this.riskManager.getCapitalCalculator(),
-      port
+      this.riskManager.getCapitalCalculator()
     );
 
     this.setupGracefulShutdown();
@@ -45,9 +43,9 @@ class DashboardServer {
 
   private displayBanner(): void {
     console.log('\n=================================================');
-    console.log('   POLYMARKET DASHBOARD SERVER');
+    console.log('   POLYMARKET API SERVER');
     console.log('=================================================');
-    console.log(`Dashboard Port: ${process.env.DASHBOARD_PORT || 3001}`);
+    console.log(`API Port: ${process.env.PORT || 3001}`);
     console.log('=================================================\n');
   }
 
@@ -87,10 +85,10 @@ class DashboardServer {
 
   async start(): Promise<void> {
     try {
-      logger.info('Starting dashboard server...');
+      logger.info('Starting API server...');
       await this.initialize();
       await this.statsServer.start();
-      logger.info('Dashboard server started successfully');
+      logger.info('API server started successfully');
     } catch (error) {
       logger.error('Failed to start server', {
         error: error instanceof Error ? error.message : String(error),
@@ -101,7 +99,7 @@ class DashboardServer {
   }
 }
 
-const server = new DashboardServer();
+const server = new ApiServer();
 server.start().catch((error) => {
   logger.error('Fatal error', { error: error.message });
   process.exit(1);

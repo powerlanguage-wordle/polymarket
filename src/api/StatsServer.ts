@@ -1,6 +1,5 @@
 import express, { Express, Request, Response } from 'express';
 import cors from 'cors';
-import path from 'path';
 import { DatabaseManager } from '../db/schema';
 import { CapitalCalculator } from '../risk/CapitalCalculator';
 import { createLogger } from '../utils/logger';
@@ -16,11 +15,11 @@ export class StatsServer {
   private server: any;
   private clobApiUrl: string;
 
-  constructor(db: DatabaseManager, capitalCalculator: CapitalCalculator, port: number = 3001, clobApiUrl: string = 'https://clob.polymarket.com') {
+  constructor(db: DatabaseManager, capitalCalculator: CapitalCalculator, port?: number, clobApiUrl: string = 'https://clob.polymarket.com') {
     this.app = express();
     this.db = db;
     this.capitalCalculator = capitalCalculator;
-    this.port = port;
+    this.port = port || parseInt(process.env.PORT || '3001');
     this.clobApiUrl = clobApiUrl;
     
     this.setupMiddleware();
@@ -31,10 +30,6 @@ export class StatsServer {
     // Enable CORS for local development
     this.app.use(cors());
     this.app.use(express.json());
-
-    // Serve static files from dashboard/dist
-    const distPath = path.join(process.cwd(), 'dashboard', 'dist');
-    this.app.use(express.static(distPath));
   }
 
   /**
@@ -223,22 +218,12 @@ export class StatsServer {
       }
     });
 
-    // Serve index.html for all other routes (SPA fallback)
-    this.app.get('*', (_req: Request, res: Response) => {
-      const indexPath = path.join(process.cwd(), 'dashboard', 'dist', 'index.html');
-      res.sendFile(indexPath, (err) => {
-        if (err) {
-          res.status(404).send('Dashboard not built. Run: npm run build:dashboard');
-        }
-      });
-    });
   }
 
   start(): Promise<void> {
     return new Promise((resolve) => {
       this.server = this.app.listen(this.port, () => {
         logger.info(`Stats server started on http://localhost:${this.port}`);
-        logger.info(`Dashboard available at http://localhost:${this.port}`);
         logger.info(`API endpoints at http://localhost:${this.port}/api/stats/*`);
         resolve();
       });
