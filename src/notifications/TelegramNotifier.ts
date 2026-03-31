@@ -22,7 +22,6 @@ export class TelegramNotifier {
   private chatId: string = '';
   private enabled: boolean = false;
   private summaryProvider: SummaryProvider | null = null;
-  private initPromise: Promise<void> | null = null;
 
   constructor(botToken?: string, chatId?: string) {
     if (!botToken || !chatId) {
@@ -32,105 +31,51 @@ export class TelegramNotifier {
     }
 
     this.chatId = chatId;
-    this.initPromise = this.initializeBot(botToken);
+    this.bot = new Telegraf(botToken);
+    this.setupCommands();
+    
+    // Start webhook in background
+    this.start().catch(error => {
+      logger.error('Failed to start Telegram webhook', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    });
   }
 
-  private async initializeBot(botToken: string): Promise<void> {
+  private async start(): Promise<void> {
+    if (!this.bot) return;
+    
     try {
-      console.log('   🔄 Initializing Telegram bot...');
-      logger.info('Initializing Telegram bot with Telegraf');
+      console.log('   🔄 Starting Telegram webhook...');
       
-      // Create Telegraf bot instance
-      this.bot = new Telegraf(botToken);
+      const webhookDomain = process.env.TELEGRAM_WEBHOOK_DOMAIN;
+      const webhookPort = parseInt(process.env.TELEGRAM_WEBHOOK_PORT || '8443');
       
-      // IMPORTANT: Delete webhook first to avoid conflicts
-      try {
-        console.log('   🔄 Clearing webhook and pending updates...');
-        await this.bot.telegram.deleteWebhook({ drop_pending_updates: true });
-        logger.info('Webhook cleared successfully');
-        
-        // Wait a moment for Telegram to fully clear
-        await new Promise(resolve => setTimeout(resolve, 1500));
-      } catch (error) {
-        logger.warn('Could not clear webhook', {
-          error: error instanceof Error ? error.message : String(error),
+      if (!webhookDomain) {
+        logger.warn('TELEGRAM_WEBHOOK_DOMAIN not set, using polling mode');
+        console.log('   ⚠️  No webhook domain, using polling (set TELEGRAM_WEBHOOK_DOMAIN for webhook)');
+        await this.bot.launch();
+      } else {
+        // Use webhook mode
+        await this.bot.launch({
+          webhook: {
+            domain: webhookDomain,
+            port: webhookPort,
+            hookPath: '/telegram/webhook',
+          },
         });
+        console.log(`   ✅ Telegram webhook ready on ${webhookDomain}:${webhookPort}`);
       }
       
-      // Set up command handlers
-      this.setupCommands();
-      
-      // Launch bot with retries
-      let retries = 3;
-      let lastError: Error | null = null;
-      
-      while (retries > 0) {
-        try {
-          // Save existing signal handlers before launch
-          const existingSigint = process.listeners('SIGINT');
-          const existingSigterm = process.listeners('SIGTERM');
-          
-          // Launch Telegraf bot (this will add its own signal handlers)
-          await this.bot.launch({
-            dropPendingUpdates: true,
-          });
-          
-          // Remove Telegraf's signal handlers (the last ones added)
-          const allSigint = process.listeners('SIGINT');
-          const allSigterm = process.listeners('SIGTERM');
-          
-          // Remove only the NEW handlers that Telegraf added
-          allSigint.slice(existingSigint.length).forEach(listener => {
-            process.removeListener('SIGINT', listener as NodeJS.SignalsListener);
-          });
-          allSigterm.slice(existingSigterm.length).forEach(listener => {
-            process.removeListener('SIGTERM', listener as NodeJS.SignalsListener);
-          });
-          
-          this.enabled = true;
-          console.log('   ✅ Telegram bot ready (/summary, /positions, /help)');
-          logger.info('Telegram bot launched successfully (signal handlers preserved)');
-          
-          return; // Success!
-          
-        } catch (error) {
-          lastError = error as Error;
-          retries--;
-          
-          if (retries > 0) {
-            const waitTime = (4 - retries) * 2000; // 2s, 4s, 6s
-            logger.warn(`Telegram launch failed, retrying in ${waitTime/1000}s...`, {
-              error: error instanceof Error ? error.message : String(error),
-              retriesLeft: retries,
-            });
-            console.log(`   ⚠️  Conflict detected, retrying in ${waitTime/1000}s... (${retries} attempts left)`);
-            await new Promise(resolve => setTimeout(resolve, waitTime));
-          }
-        }
-      }
-      
-      // All retries failed
-      throw lastError || new Error('Failed to launch Telegram bot');
+      this.enabled = true;
+      logger.info('Telegram bot started successfully');
       
     } catch (error) {
-      console.log('   ❌ Failed to launch Telegram bot');
-      console.log('   💡 Run: npm run fix:telegram to resolve conflicts');
-      logger.error('Failed to launch Telegram bot', {
+      console.log('   ⚠️  Telegram bot failed to start');
+      logger.error('Telegram bot start failed', {
         error: error instanceof Error ? error.message : String(error),
       });
       this.enabled = false;
-      throw error;
-    }
-  }
-
-  async waitForReady(): Promise<void> {
-    if (this.initPromise) {
-      try {
-        await this.initPromise;
-      } catch (error) {
-        // Initialization failed, but don't throw - just log
-        logger.debug('Telegram initialization failed or not configured');
-      }
     }
   }
 
@@ -435,19 +380,6 @@ Try: /summary or /help
 
   isEnabled(): boolean {
     return this.enabled;
-  }
-
-  async stop(): Promise<void> {
-    if (this.bot) {
-      try {
-        this.bot.stop();
-        logger.info('Telegram bot stopped');
-      } catch (error) {
-        logger.error('Error stopping Telegram bot', {
-          error: error instanceof Error ? error.message : String(error),
-        });
-      }
-    }
   }
 
   async healthCheck(): Promise<{ healthy: boolean; error?: string }> {

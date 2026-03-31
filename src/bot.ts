@@ -287,7 +287,6 @@ class PolymarketCopyBot implements SummaryProvider {
       logger.info(`Received ${signal}, shutting down gracefully...`);
 
       this.tradeMonitor.stop();
-      await this.telegramNotifier.stop();
       await this.statsServer.stop();
 
       await new Promise((resolve) => setTimeout(resolve, 1000));
@@ -332,16 +331,11 @@ class PolymarketCopyBot implements SummaryProvider {
       console.log('🔄 Starting trade monitor...');
       await this.tradeMonitor.start();
       
-      // Wait for Telegram to be ready and send startup message
-      // Don't block bot startup if Telegram fails
+      // Send Telegram startup message (non-blocking)
       console.log('📱 Initializing Telegram...');
-      this.telegramNotifier.waitForReady()
-        .then(() => this.telegramNotifier.sendStartupMessage(config.execution.mode))
-        .catch((error) => {
-          logger.warn('Telegram initialization failed, bot will continue without notifications', {
-            error: error instanceof Error ? error.message : String(error),
-          });
-        });
+      setTimeout(() => {
+        this.telegramNotifier.sendStartupMessage(config.execution.mode);
+      }, 2000);
       
 
       console.log('\n\u2728 BOT IS NOW RUNNING AND MONITORING FOR TRADES!\n');
