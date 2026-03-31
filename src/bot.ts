@@ -332,8 +332,14 @@ class PolymarketCopyBot implements SummaryProvider {
       console.log('🔄 Starting trade monitor...');
       await this.tradeMonitor.start();
       
-      // Send startup notification (Telegraf handles async init internally)
-      await this.telegramNotifier.sendStartupMessage(config.execution.mode);
+      // Wait for Telegram to be ready and send startup message
+      console.log('📱 Initializing Telegram...');
+      try {
+        await this.telegramNotifier.waitForReady();
+        await this.telegramNotifier.sendStartupMessage(config.execution.mode);
+      } catch (error) {
+        logger.debug('Telegram not configured or failed to initialize');
+      }
       
 
       console.log('\n\u2728 BOT IS NOW RUNNING AND MONITORING FOR TRADES!\n');

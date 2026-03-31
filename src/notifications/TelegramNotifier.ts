@@ -22,6 +22,7 @@ export class TelegramNotifier {
   private chatId: string = '';
   private enabled: boolean = false;
   private summaryProvider: SummaryProvider | null = null;
+  private initPromise: Promise<void> | null = null;
 
   constructor(botToken?: string, chatId?: string) {
     if (!botToken || !chatId) {
@@ -31,10 +32,10 @@ export class TelegramNotifier {
     }
 
     this.chatId = chatId;
-    this.initializeBot(botToken);
+    this.initPromise = this.initializeBot(botToken);
   }
 
-  private initializeBot(botToken: string): void {
+  private async initializeBot(botToken: string): Promise<void> {
     try {
       console.log('   🔄 Initializing Telegram bot...');
       logger.info('Initializing Telegram bot with Telegraf');
@@ -45,31 +46,37 @@ export class TelegramNotifier {
       // Set up command handlers
       this.setupCommands();
       
-      // Launch bot
-      this.bot.launch({
+      // Launch bot and wait for it to be ready
+      await this.bot.launch({
         dropPendingUpdates: true, // This automatically clears pending updates
-      }).then(() => {
-        this.enabled = true;
-        console.log('   ✅ Telegram bot ready (/summary, /positions, /help)');
-        logger.info('Telegram bot launched successfully');
-      }).catch((error) => {
-        console.log('   ❌ Failed to launch Telegram bot');
-        logger.error('Failed to launch Telegram bot', {
-          error: error instanceof Error ? error.message : String(error),
-        });
-        this.enabled = false;
       });
+      
+      this.enabled = true;
+      console.log('   ✅ Telegram bot ready (/summary, /positions, /help)');
+      logger.info('Telegram bot launched successfully');
       
       // Enable graceful stop
       process.once('SIGINT', () => this.stop());
       process.once('SIGTERM', () => this.stop());
       
     } catch (error) {
-      console.log('   ❌ Failed to initialize Telegram bot');
-      logger.error('Failed to initialize Telegram bot', {
+      console.log('   ❌ Failed to launch Telegram bot');
+      logger.error('Failed to launch Telegram bot', {
         error: error instanceof Error ? error.message : String(error),
       });
       this.enabled = false;
+      throw error;
+    }
+  }
+
+  async waitForReady(): Promise<void> {
+    if (this.initPromise) {
+      try {
+        await this.initPromise;
+      } catch (error) {
+        // Initialization failed, but don't throw - just log
+        logger.debug('Telegram initialization failed or not configured');
+      }
     }
   }
 
@@ -324,15 +331,12 @@ ${emoji} <b>Trade Execution ${status}</b>
   }
 
   async sendStartupMessage(mode: string): Promise<void> {
-    if (!this.enabled || !this.bot) {
-      logger.warn('Cannot send startup message - Telegram bot not enabled');
+    if (!this.bot) {
+      logger.warn('Cannot send startup message - Telegram bot not initialized');
       return;
     }
 
     try {
-      // Wait for bot to fully initialize
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
       const message = `
 🚀 <b>Bot Started</b>
 
