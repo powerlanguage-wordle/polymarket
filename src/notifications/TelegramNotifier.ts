@@ -29,17 +29,43 @@ export class TelegramNotifier {
       return;
     }
 
+    this.chatId = chatId;
+
+    this.initializeBot(botToken).catch(error => {
+      logger.error('Failed to initialize Telegram bot asynchronously', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    });
+  }
+
+  private async initializeBot(botToken: string): Promise<void> {
     try {
-      // Enable polling for command handling
-      this.bot = new TelegramBot(botToken, { polling: true });
-      this.chatId = chatId;
+      // Create bot instance first without polling
+      this.bot = new TelegramBot(botToken, { polling: false });
+      
+      // Delete webhook to avoid conflicts with polling
+      try {
+        await this.bot.deleteWebHook();
+        logger.info('Deleted any existing webhook');
+      } catch (error) {
+        logger.warn('Could not delete webhook (might not exist)', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+      
+      // Now start polling
+      await this.bot.startPolling({ restart: true });
       this.enabled = true;
+      
+      // Set up command handlers
       this.setupCommands();
-      logger.info('Telegram notifier initialized successfully with command support');
+      
+      logger.info('Telegram bot initialized successfully with command support');
     } catch (error) {
       logger.error('Failed to initialize Telegram bot', {
         error: error instanceof Error ? error.message : String(error),
       });
+      this.enabled = false;
     }
   }
 
@@ -165,6 +191,20 @@ Monitoring: Active
       `.trim();
 
       await this.bot?.sendMessage(this.chatId, statusMessage, { parse_mode: 'HTML' });
+    });
+
+    // Handle polling errors
+    this.bot.on('polling_error', (error) => {
+      logger.error('Telegram polling error', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    });
+
+    // Handle errors
+    this.bot.on('error', (error) => {
+      logger.error('Telegram bot error', {
+        error: error instanceof Error ? error.message : String(error),
+      });
     });
 
     logger.info('Telegram bot commands configured');
@@ -306,20 +346,23 @@ ${emoji} <b>Trade Execution ${status}</b>
   }
 
   async sendStartupMessage(mode: string): Promise<void> {
-    if (!this.enabled || !this.bot) return;
+    if (!this.enabled || !this.bot) {
+      logger.warn('Cannot send startup message - Telegram bot not enabled');
+      return;
+    }
 
     try {
+      // Wait a bit for polling to fully initialize
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
       const message = `
 🚀 <b>Bot Started</b>
 
 <b>Mode:</b> ${mode.toUpperCase()}
 <b>Status:</b> Monitoring for trades
 
-<b>Available commands:</b>
-/summary - Get portfolio summary
-/positions - List open positions
-/status - Check bot status
-/help - Show all commands
+<b>📱 Commands are ready!</b>
+Try: /summary or /help
 
 <i>${new Date().toLocaleString()}</i>
       `.trim();
@@ -363,12 +406,19 @@ ${emoji} <b>Trade Execution ${status}</b>
     if (this.bot) {
       try {
         await this.bot.stopPolling();
-        logger.info('Telegram bot stopped');
+        logger.info('Telegram bot polling stopped');
       } catch (error) {
         logger.error('Error stopping Telegram bot', {
           error: error instanceof Error ? error.message : String(error),
         });
       }
     }
+  }
+
+  /**
+   * Check if the bot is ready to receive commands
+   */
+  isReady(): boolean {
+    return this.enabled && this.bot !== null;
   }
 }
