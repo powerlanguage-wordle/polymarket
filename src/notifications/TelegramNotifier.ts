@@ -66,13 +66,30 @@ export class TelegramNotifier {
       
       while (retries > 0) {
         try {
+          // Save existing signal handlers before launch
+          const existingSigint = process.listeners('SIGINT');
+          const existingSigterm = process.listeners('SIGTERM');
+          
+          // Launch Telegraf bot (this will add its own signal handlers)
           await this.bot.launch({
             dropPendingUpdates: true,
           });
           
+          // Remove Telegraf's signal handlers (the last ones added)
+          const allSigint = process.listeners('SIGINT');
+          const allSigterm = process.listeners('SIGTERM');
+          
+          // Remove only the NEW handlers that Telegraf added
+          allSigint.slice(existingSigint.length).forEach(listener => {
+            process.removeListener('SIGINT', listener as NodeJS.SignalsListener);
+          });
+          allSigterm.slice(existingSigterm.length).forEach(listener => {
+            process.removeListener('SIGTERM', listener as NodeJS.SignalsListener);
+          });
+          
           this.enabled = true;
           console.log('   ✅ Telegram bot ready (/summary, /positions, /help)');
-          logger.info('Telegram bot launched successfully');
+          logger.info('Telegram bot launched successfully (signal handlers preserved)');
           
           return; // Success!
           
