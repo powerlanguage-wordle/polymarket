@@ -1,22 +1,22 @@
 {
   "trackedTraders": [
-    "0x9d84ce0306f8551e02efef1680475fc0f1dc1344"
+    "0x6c743aafd813475986dcd930f380a1f50901bd4e"
   ],
   "riskParams": {
     "minTradeSize": 1,
-    "maxCapitalPerTrade": 0.05,
+    "maxCapitalPerTrade": 0.25,
     "maxSlippage": 0.05,
-    "maxPositions": 10,
+    "maxPositions": 4,
     "maxMarketExposure": 0.20
   },
   "execution": {
     "mode": "paper",
-    "pollInterval": 5000,
+    "pollInterval": 45000,
     "retryAttempts": 3,
     "retryDelayMs": 1000,
     "tradeAggregation": {
       "enabled": true,
-      "windowMs": 30000
+      "windowMs": 90000
     }
   },
   "polymarket": {
