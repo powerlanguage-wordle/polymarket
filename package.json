@@ -11,6 +11,7 @@
     "setup": "ts-node scripts/setup-api-credentials.ts",
     "setup:telegram": "ts-node scripts/setup-telegram.ts",
     "test:telegram": "ts-node scripts/test-telegram.ts",
+    "fix:telegram": "ts-node scripts/fix-telegram-conflicts.ts",
     "reset": "ts-node scripts/reset-paper-trading.ts",
     "status": "ts-node scripts/check-trades.ts",
     "test": "jest",

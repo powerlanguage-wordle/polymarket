@@ -47,13 +47,20 @@ export class TelegramNotifier {
       try {
         await this.bot.deleteWebHook();
         logger.info('Deleted any existing webhook');
+        
+        // Clear any pending updates
+        await this.bot.getUpdates({ offset: -1, timeout: 1 });
+        logger.info('Cleared pending updates');
       } catch (error) {
-        logger.warn('Could not delete webhook (might not exist)', {
+        logger.warn('Could not clear webhook/updates (might not exist)', {
           error: error instanceof Error ? error.message : String(error),
         });
       }
       
-      // Now start polling
+      // Wait a moment before starting polling
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Now start polling with clean state
       await this.bot.startPolling({ restart: true });
       this.enabled = true;
       
@@ -62,9 +69,20 @@ export class TelegramNotifier {
       
       logger.info('Telegram bot initialized successfully with command support');
     } catch (error) {
-      logger.error('Failed to initialize Telegram bot', {
-        error: error instanceof Error ? error.message : String(error),
-      });
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      
+      // Check if it's a conflict error
+      if (errorMsg.includes('409') || errorMsg.includes('Conflict')) {
+        logger.error('Telegram bot conflict detected - another instance may be running', {
+          error: errorMsg,
+          solution: 'Run: npm run fix:telegram to resolve',
+        });
+      } else {
+        logger.error('Failed to initialize Telegram bot', {
+          error: errorMsg,
+        });
+      }
+      
       this.enabled = false;
     }
   }
@@ -195,9 +213,16 @@ Monitoring: Active
 
     // Handle polling errors
     this.bot.on('polling_error', (error) => {
-      logger.error('Telegram polling error', {
-        error: error instanceof Error ? error.message : String(error),
-      });
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      
+      if (errorMsg.includes('409') || errorMsg.includes('Conflict')) {
+        logger.error('Telegram polling conflict - another bot instance detected', {
+          error: errorMsg,
+          solution: 'Stop all bot instances and run: npm run fix:telegram',
+        });
+      } else {
+        logger.error('Telegram polling error', { error: errorMsg });
+      }
     });
 
     // Handle errors
