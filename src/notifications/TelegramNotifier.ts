@@ -4,10 +4,24 @@ import type { Trade, ValidationResult, ExecutionResult, Position } from '../type
 
 const logger = createLogger('TelegramNotifier');
 
+export interface SummaryProvider {
+  getSummaryData(): Promise<{
+    totalTrades: number;
+    processedTrades: number;
+    copiedTrades: number;
+    skippedTrades: number;
+    positions: Position[];
+    totalPnL: number;
+    openPositions: number;
+    closedPositions: number;
+  }>;
+}
+
 export class TelegramNotifier {
   private bot: TelegramBot | null = null;
   private chatId: string = '';
   private enabled: boolean = false;
+  private summaryProvider: SummaryProvider | null = null;
 
   constructor(botToken?: string, chatId?: string) {
     if (!botToken || !chatId) {
@@ -16,15 +30,144 @@ export class TelegramNotifier {
     }
 
     try {
-      this.bot = new TelegramBot(botToken, { polling: false });
+      // Enable polling for command handling
+      this.bot = new TelegramBot(botToken, { polling: true });
       this.chatId = chatId;
       this.enabled = true;
-      logger.info('Telegram notifier initialized successfully');
+      this.setupCommands();
+      logger.info('Telegram notifier initialized successfully with command support');
     } catch (error) {
       logger.error('Failed to initialize Telegram bot', {
         error: error instanceof Error ? error.message : String(error),
       });
     }
+  }
+
+  setSummaryProvider(provider: SummaryProvider): void {
+    this.summaryProvider = provider;
+  }
+
+  private setupCommands(): void {
+    if (!this.bot) return;
+
+    // /start command
+    this.bot.onText(/\/start/, async (msg) => {
+      if (msg.chat.id.toString() !== this.chatId) return;
+      
+      const welcomeMessage = `
+🤖 <b>Polymarket Copy Trading Bot</b>
+
+Available commands:
+/summary - Get current portfolio summary
+/positions - List all open positions
+/help - Show this help message
+/status - Check bot status
+
+The bot will notify you when trades are detected and executed.
+      `.trim();
+
+      await this.bot?.sendMessage(this.chatId, welcomeMessage, { parse_mode: 'HTML' });
+    });
+
+    // /help command
+    this.bot.onText(/\/help/, async (msg) => {
+      if (msg.chat.id.toString() !== this.chatId) return;
+      
+      const helpMessage = `
+📖 <b>Bot Commands</b>
+
+/summary - Portfolio summary with PnL and recent activity
+/positions - List all open positions with details
+/status - Bot health and monitoring status
+/help - Show this help message
+
+<i>Note: Commands only work from authorized chat ID</i>
+      `.trim();
+
+      await this.bot?.sendMessage(this.chatId, helpMessage, { parse_mode: 'HTML' });
+    });
+
+    // /summary command
+    this.bot.onText(/\/summary/, async (msg) => {
+      if (msg.chat.id.toString() !== this.chatId) return;
+      
+      try {
+        if (!this.summaryProvider) {
+          await this.bot?.sendMessage(this.chatId, '❌ Summary provider not initialized', { parse_mode: 'HTML' });
+          return;
+        }
+
+        const summary = await this.summaryProvider.getSummaryData();
+        await this.sendSummary(summary);
+      } catch (error) {
+        logger.error('Failed to handle /summary command', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+        await this.bot?.sendMessage(this.chatId, '❌ Failed to fetch summary', { parse_mode: 'HTML' });
+      }
+    });
+
+    // /positions command
+    this.bot.onText(/\/positions/, async (msg) => {
+      if (msg.chat.id.toString() !== this.chatId) return;
+      
+      try {
+        if (!this.summaryProvider) {
+          await this.bot?.sendMessage(this.chatId, '❌ Summary provider not initialized', { parse_mode: 'HTML' });
+          return;
+        }
+
+        const summary = await this.summaryProvider.getSummaryData();
+        
+        if (summary.positions.length === 0) {
+          await this.bot?.sendMessage(this.chatId, '📭 No open positions', { parse_mode: 'HTML' });
+          return;
+        }
+
+        let message = `📋 <b>Open Positions (${summary.positions.length})</b>\n\n`;
+        
+        summary.positions.forEach((pos, index) => {
+          const posEmoji = (pos.pnl || 0) >= 0 ? '📈' : '📉';
+          const posSign = (pos.pnl || 0) >= 0 ? '+' : '';
+          const pnlPercent = pos.currentPrice && pos.entryPrice 
+            ? ((pos.currentPrice - pos.entryPrice) / pos.entryPrice * 100).toFixed(2)
+            : '0.00';
+          
+          message += `<b>${index + 1}.</b> ${pos.outcome} ${pos.side}\n`;
+          message += `   Size: ${pos.size.toFixed(2)} @ $${pos.entryPrice.toFixed(4)}\n`;
+          message += `   Current: $${(pos.currentPrice || pos.entryPrice).toFixed(4)}\n`;
+          message += `   ${posEmoji} PnL: ${posSign}$${(pos.pnl || 0).toFixed(2)} (${posSign}${pnlPercent}%)\n\n`;
+        });
+
+        message += `<i>${new Date().toLocaleString()}</i>`;
+
+        await this.bot?.sendMessage(this.chatId, message, { parse_mode: 'HTML' });
+      } catch (error) {
+        logger.error('Failed to handle /positions command', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+        await this.bot?.sendMessage(this.chatId, '❌ Failed to fetch positions', { parse_mode: 'HTML' });
+      }
+    });
+
+    // /status command
+    this.bot.onText(/\/status/, async (msg) => {
+      if (msg.chat.id.toString() !== this.chatId) return;
+      
+      const statusMessage = `
+✅ <b>Bot Status</b>
+
+Status: <b>RUNNING</b>
+Mode: Paper Trading
+Monitoring: Active
+
+<i>${new Date().toLocaleString()}</i>
+      `.trim();
+
+      await this.bot?.sendMessage(this.chatId, statusMessage, { parse_mode: 'HTML' });
+    });
+
+    logger.info('Telegram bot commands configured');
   }
 
   async sendTradeDetected(trade: Trade, validation: ValidationResult): Promise<void> {
@@ -105,7 +248,7 @@ ${emoji} <b>Trade Execution ${status}</b>
     }
   }
 
-  async sendHourlySummary(summary: {
+  async sendSummary(summary: {
     totalTrades: number;
     processedTrades: number;
     copiedTrades: number;
@@ -122,7 +265,7 @@ ${emoji} <b>Trade Execution ${status}</b>
       const pnlColor = summary.totalPnL >= 0 ? '+' : '';
       
       let message = `
-📊 <b>Hourly Summary</b>
+📊 <b>Portfolio Summary</b>
 
 <b>📈 Trading Activity</b>
 • Total trades: ${summary.totalTrades}
@@ -154,9 +297,9 @@ ${emoji} <b>Trade Execution ${status}</b>
 <i>${new Date().toLocaleString()}</i>`;
 
       await this.bot.sendMessage(this.chatId, message, { parse_mode: 'HTML' });
-      logger.info('Hourly summary sent to Telegram');
+      logger.info('Summary sent to Telegram');
     } catch (error) {
-      logger.error('Failed to send hourly summary', {
+      logger.error('Failed to send summary', {
         error: error instanceof Error ? error.message : String(error),
       });
     }
@@ -171,6 +314,12 @@ ${emoji} <b>Trade Execution ${status}</b>
 
 <b>Mode:</b> ${mode.toUpperCase()}
 <b>Status:</b> Monitoring for trades
+
+<b>Available commands:</b>
+/summary - Get portfolio summary
+/positions - List open positions
+/status - Check bot status
+/help - Show all commands
 
 <i>${new Date().toLocaleString()}</i>
       `.trim();
@@ -208,5 +357,18 @@ ${emoji} <b>Trade Execution ${status}</b>
 
   isEnabled(): boolean {
     return this.enabled;
+  }
+
+  async stop(): Promise<void> {
+    if (this.bot) {
+      try {
+        await this.bot.stopPolling();
+        logger.info('Telegram bot stopped');
+      } catch (error) {
+        logger.error('Error stopping Telegram bot', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
   }
 }
