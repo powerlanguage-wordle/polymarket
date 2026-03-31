@@ -25,6 +25,7 @@ export class TelegramNotifier {
 
   constructor(botToken?: string, chatId?: string) {
     if (!botToken || !chatId) {
+      console.log('   ℹ️  Telegram notifications disabled (no credentials)');
       logger.info('Telegram notifications disabled - no credentials provided');
       return;
     }
@@ -40,44 +41,86 @@ export class TelegramNotifier {
 
   private async initializeBot(botToken: string): Promise<void> {
     try {
+      console.log('   🔄 Initializing Telegram bot...');
+      logger.info('Initializing Telegram bot...');
+      
       // Create bot instance first without polling
       this.bot = new TelegramBot(botToken, { polling: false });
       
-      // Delete webhook to avoid conflicts with polling
+      // Step 1: Get bot info to verify token
       try {
-        await this.bot.deleteWebHook();
-        logger.info('Deleted any existing webhook');
-        
-        // Clear any pending updates
-        await this.bot.getUpdates({ offset: -1, timeout: 1 });
-        logger.info('Cleared pending updates');
+        const me = await this.bot.getMe();
+        console.log(`   ✅ Bot verified: @${me.username}`);
+        logger.info('Bot verified', { username: me.username, firstName: me.first_name });
       } catch (error) {
-        logger.warn('Could not clear webhook/updates (might not exist)', {
+        throw new Error(`Invalid bot token: ${error instanceof Error ? error.message : String(error)}`);
+      }
+      
+      // Step 2: Delete webhook to avoid conflicts with polling
+      try {
+        const deleted = await this.bot.deleteWebHook();
+        if (deleted) {
+          console.log('   ✅ Cleared webhook');
+          logger.info('Cleared existing webhook');
+        }
+      } catch (error) {
+        logger.warn('Could not delete webhook', {
           error: error instanceof Error ? error.message : String(error),
         });
       }
       
-      // Wait a moment before starting polling
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // Step 3: Clear any pending updates to prevent conflicts
+      try {
+        await this.bot.getUpdates({ offset: -1, timeout: 1 });
+        console.log('   ✅ Cleared pending updates');
+        logger.info('Cleared pending updates');
+      } catch (error) {
+        logger.debug('No pending updates to clear');
+      }
       
-      // Now start polling with clean state
+      // Step 4: Wait a moment to ensure clean state
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Step 5: Start polling with restart option
+      console.log('   🔄 Starting Telegram polling...');
+      logger.info('Starting Telegram polling...');
       await this.bot.startPolling({ restart: true });
       this.enabled = true;
       
-      // Set up command handlers
+      // Step 6: Set up command handlers
       this.setupCommands();
       
-      logger.info('Telegram bot initialized successfully with command support');
+      console.log('   ✅ Telegram commands ready (/summary, /positions, /help)');
+      logger.info('Telegram bot ready - commands enabled');
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       
-      // Check if it's a conflict error
+      // Check if it's a conflict error and try to auto-resolve
       if (errorMsg.includes('409') || errorMsg.includes('Conflict')) {
-        logger.error('Telegram bot conflict detected - another instance may be running', {
-          error: errorMsg,
-          solution: 'Run: npm run fix:telegram to resolve',
-        });
+        console.log('   ⚠️  Conflict detected - attempting auto-recovery...');
+        logger.warn('Telegram conflict detected - attempting auto-recovery...');
+        
+        try {
+          // Try to force clear the conflict
+          if (this.bot) {
+            await this.bot.deleteWebHook();
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            await this.bot.startPolling({ restart: true });
+            this.enabled = true;
+            this.setupCommands();
+            console.log('   ✅ Auto-recovery successful');
+            logger.info('Auto-recovery successful - bot is now ready');
+            return;
+          }
+        } catch (retryError) {
+          console.log('   ❌ Auto-recovery failed - run: npm run fix:telegram');
+          logger.error('Auto-recovery failed - another bot instance may be running', {
+            error: errorMsg,
+            solution: 'Stop all bot instances or run: npm run fix:telegram',
+          });
+        }
       } else {
+        console.log('   ❌ Failed to initialize Telegram bot');
         logger.error('Failed to initialize Telegram bot', {
           error: errorMsg,
         });
@@ -377,8 +420,8 @@ ${emoji} <b>Trade Execution ${status}</b>
     }
 
     try {
-      // Wait a bit for polling to fully initialize
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Wait for polling to fully initialize and clear any conflicts
+      await new Promise(resolve => setTimeout(resolve, 2000));
       
       const message = `
 🚀 <b>Bot Started</b>
@@ -398,6 +441,25 @@ Try: /summary or /help
       logger.error('Failed to send startup message', {
         error: error instanceof Error ? error.message : String(error),
       });
+    }
+  }
+
+  /**
+   * Check if bot is healthy and responding
+   */
+  async healthCheck(): Promise<{ healthy: boolean; error?: string }> {
+    if (!this.enabled || !this.bot) {
+      return { healthy: false, error: 'Bot not enabled' };
+    }
+
+    try {
+      await this.bot.getMe();
+      return { healthy: true };
+    } catch (error) {
+      return {
+        healthy: false,
+        error: error instanceof Error ? error.message : String(error),
+      };
     }
   }
 
