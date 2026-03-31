@@ -1,4 +1,4 @@
-import TelegramBot from 'node-telegram-bot-api';
+import { Telegraf, Context } from 'telegraf';
 import { createLogger } from '../utils/logger';
 import type { Trade, ValidationResult, ExecutionResult, Position } from '../types';
 
@@ -18,7 +18,7 @@ export interface SummaryProvider {
 }
 
 export class TelegramNotifier {
-  private bot: TelegramBot | null = null;
+  private bot: Telegraf | null = null;
   private chatId: string = '';
   private enabled: boolean = false;
   private summaryProvider: SummaryProvider | null = null;
@@ -31,101 +31,44 @@ export class TelegramNotifier {
     }
 
     this.chatId = chatId;
-
-    this.initializeBot(botToken).catch(error => {
-      logger.error('Failed to initialize Telegram bot asynchronously', {
-        error: error instanceof Error ? error.message : String(error),
-      });
-    });
+    this.initializeBot(botToken);
   }
 
-  private async initializeBot(botToken: string): Promise<void> {
+  private initializeBot(botToken: string): void {
     try {
       console.log('   🔄 Initializing Telegram bot...');
-      logger.info('Initializing Telegram bot...');
+      logger.info('Initializing Telegram bot with Telegraf');
       
-      // Create bot instance first without polling
-      this.bot = new TelegramBot(botToken, { polling: false });
+      // Create Telegraf bot instance
+      this.bot = new Telegraf(botToken);
       
-      // Step 1: Get bot info to verify token
-      try {
-        const me = await this.bot.getMe();
-        console.log(`   ✅ Bot verified: @${me.username}`);
-        logger.info('Bot verified', { username: me.username, firstName: me.first_name });
-      } catch (error) {
-        throw new Error(`Invalid bot token: ${error instanceof Error ? error.message : String(error)}`);
-      }
-      
-      // Step 2: Delete webhook to avoid conflicts with polling
-      try {
-        const deleted = await this.bot.deleteWebHook();
-        if (deleted) {
-          console.log('   ✅ Cleared webhook');
-          logger.info('Cleared existing webhook');
-        }
-      } catch (error) {
-        logger.warn('Could not delete webhook', {
-          error: error instanceof Error ? error.message : String(error),
-        });
-      }
-      
-      // Step 3: Clear any pending updates to prevent conflicts
-      try {
-        await this.bot.getUpdates({ offset: -1, timeout: 1 });
-        console.log('   ✅ Cleared pending updates');
-        logger.info('Cleared pending updates');
-      } catch (error) {
-        logger.debug('No pending updates to clear');
-      }
-      
-      // Step 4: Wait a moment to ensure clean state
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Step 5: Start polling with restart option
-      console.log('   🔄 Starting Telegram polling...');
-      logger.info('Starting Telegram polling...');
-      await this.bot.startPolling({ restart: true });
-      this.enabled = true;
-      
-      // Step 6: Set up command handlers
+      // Set up command handlers
       this.setupCommands();
       
-      console.log('   ✅ Telegram commands ready (/summary, /positions, /help)');
-      logger.info('Telegram bot ready - commands enabled');
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : String(error);
-      
-      // Check if it's a conflict error and try to auto-resolve
-      if (errorMsg.includes('409') || errorMsg.includes('Conflict')) {
-        console.log('   ⚠️  Conflict detected - attempting auto-recovery...');
-        logger.warn('Telegram conflict detected - attempting auto-recovery...');
-        
-        try {
-          // Try to force clear the conflict
-          if (this.bot) {
-            await this.bot.deleteWebHook();
-            await new Promise(resolve => setTimeout(resolve, 2000));
-            await this.bot.startPolling({ restart: true });
-            this.enabled = true;
-            this.setupCommands();
-            console.log('   ✅ Auto-recovery successful');
-            logger.info('Auto-recovery successful - bot is now ready');
-            return;
-          }
-        } catch (retryError) {
-          console.log('   ❌ Auto-recovery failed - run: npm run fix:telegram');
-          logger.error('Auto-recovery failed - another bot instance may be running', {
-            error: errorMsg,
-            solution: 'Stop all bot instances or run: npm run fix:telegram',
-          });
-        }
-      } else {
-        console.log('   ❌ Failed to initialize Telegram bot');
-        logger.error('Failed to initialize Telegram bot', {
-          error: errorMsg,
+      // Launch bot
+      this.bot.launch({
+        dropPendingUpdates: true, // This automatically clears pending updates
+      }).then(() => {
+        this.enabled = true;
+        console.log('   ✅ Telegram bot ready (/summary, /positions, /help)');
+        logger.info('Telegram bot launched successfully');
+      }).catch((error) => {
+        console.log('   ❌ Failed to launch Telegram bot');
+        logger.error('Failed to launch Telegram bot', {
+          error: error instanceof Error ? error.message : String(error),
         });
-      }
+        this.enabled = false;
+      });
       
+      // Enable graceful stop
+      process.once('SIGINT', () => this.stop());
+      process.once('SIGTERM', () => this.stop());
+      
+    } catch (error) {
+      console.log('   ❌ Failed to initialize Telegram bot');
+      logger.error('Failed to initialize Telegram bot', {
+        error: error instanceof Error ? error.message : String(error),
+      });
       this.enabled = false;
     }
   }
@@ -138,8 +81,8 @@ export class TelegramNotifier {
     if (!this.bot) return;
 
     // /start command
-    this.bot.onText(/\/start/, async (msg) => {
-      if (msg.chat.id.toString() !== this.chatId) return;
+    this.bot.command('start', async (ctx: Context) => {
+      if (ctx.chat?.id.toString() !== this.chatId) return;
       
       const welcomeMessage = `
 🤖 <b>Polymarket Copy Trading Bot</b>
@@ -153,12 +96,12 @@ Available commands:
 The bot will notify you when trades are detected and executed.
       `.trim();
 
-      await this.bot?.sendMessage(this.chatId, welcomeMessage, { parse_mode: 'HTML' });
+      await ctx.replyWithHTML(welcomeMessage);
     });
 
     // /help command
-    this.bot.onText(/\/help/, async (msg) => {
-      if (msg.chat.id.toString() !== this.chatId) return;
+    this.bot.command('help', async (ctx: Context) => {
+      if (ctx.chat?.id.toString() !== this.chatId) return;
       
       const helpMessage = `
 📖 <b>Bot Commands</b>
@@ -171,43 +114,43 @@ The bot will notify you when trades are detected and executed.
 <i>Note: Commands only work from authorized chat ID</i>
       `.trim();
 
-      await this.bot?.sendMessage(this.chatId, helpMessage, { parse_mode: 'HTML' });
+      await ctx.replyWithHTML(helpMessage);
     });
 
     // /summary command
-    this.bot.onText(/\/summary/, async (msg) => {
-      if (msg.chat.id.toString() !== this.chatId) return;
+    this.bot.command('summary', async (ctx: Context) => {
+      if (ctx.chat?.id.toString() !== this.chatId) return;
       
       try {
         if (!this.summaryProvider) {
-          await this.bot?.sendMessage(this.chatId, '❌ Summary provider not initialized', { parse_mode: 'HTML' });
+          await ctx.replyWithHTML('❌ Summary provider not initialized');
           return;
         }
 
         const summary = await this.summaryProvider.getSummaryData();
-        await this.sendSummary(summary);
+        await this.sendSummaryMessage(ctx, summary);
       } catch (error) {
         logger.error('Failed to handle /summary command', {
           error: error instanceof Error ? error.message : String(error),
         });
-        await this.bot?.sendMessage(this.chatId, '❌ Failed to fetch summary', { parse_mode: 'HTML' });
+        await ctx.replyWithHTML('❌ Failed to fetch summary');
       }
     });
 
     // /positions command
-    this.bot.onText(/\/positions/, async (msg) => {
-      if (msg.chat.id.toString() !== this.chatId) return;
+    this.bot.command('positions', async (ctx: Context) => {
+      if (ctx.chat?.id.toString() !== this.chatId) return;
       
       try {
         if (!this.summaryProvider) {
-          await this.bot?.sendMessage(this.chatId, '❌ Summary provider not initialized', { parse_mode: 'HTML' });
+          await ctx.replyWithHTML('❌ Summary provider not initialized');
           return;
         }
 
         const summary = await this.summaryProvider.getSummaryData();
         
         if (summary.positions.length === 0) {
-          await this.bot?.sendMessage(this.chatId, '📭 No open positions', { parse_mode: 'HTML' });
+          await ctx.replyWithHTML('📭 No open positions');
           return;
         }
 
@@ -228,18 +171,18 @@ The bot will notify you when trades are detected and executed.
 
         message += `<i>${new Date().toLocaleString()}</i>`;
 
-        await this.bot?.sendMessage(this.chatId, message, { parse_mode: 'HTML' });
+        await ctx.replyWithHTML(message);
       } catch (error) {
         logger.error('Failed to handle /positions command', {
           error: error instanceof Error ? error.message : String(error),
         });
-        await this.bot?.sendMessage(this.chatId, '❌ Failed to fetch positions', { parse_mode: 'HTML' });
+        await ctx.replyWithHTML('❌ Failed to fetch positions');
       }
     });
 
     // /status command
-    this.bot.onText(/\/status/, async (msg) => {
-      if (msg.chat.id.toString() !== this.chatId) return;
+    this.bot.command('status', async (ctx: Context) => {
+      if (ctx.chat?.id.toString() !== this.chatId) return;
       
       const statusMessage = `
 ✅ <b>Bot Status</b>
@@ -251,28 +194,7 @@ Monitoring: Active
 <i>${new Date().toLocaleString()}</i>
       `.trim();
 
-      await this.bot?.sendMessage(this.chatId, statusMessage, { parse_mode: 'HTML' });
-    });
-
-    // Handle polling errors
-    this.bot.on('polling_error', (error) => {
-      const errorMsg = error instanceof Error ? error.message : String(error);
-      
-      if (errorMsg.includes('409') || errorMsg.includes('Conflict')) {
-        logger.error('Telegram polling conflict - another bot instance detected', {
-          error: errorMsg,
-          solution: 'Stop all bot instances and run: npm run fix:telegram',
-        });
-      } else {
-        logger.error('Telegram polling error', { error: errorMsg });
-      }
-    });
-
-    // Handle errors
-    this.bot.on('error', (error) => {
-      logger.error('Telegram bot error', {
-        error: error instanceof Error ? error.message : String(error),
-      });
+      await ctx.replyWithHTML(statusMessage);
     });
 
     logger.info('Telegram bot commands configured');
@@ -305,7 +227,7 @@ ${this.formatChecks(validation)}
 <i>${new Date().toLocaleString()}</i>
       `.trim();
 
-      await this.bot.sendMessage(this.chatId, message, { parse_mode: 'HTML' });
+      await this.bot.telegram.sendMessage(this.chatId, message, { parse_mode: 'HTML' });
     } catch (error) {
       logger.error('Failed to send trade notification', {
         error: error instanceof Error ? error.message : String(error),
@@ -348,7 +270,7 @@ ${emoji} <b>Trade Execution ${status}</b>
 
 <i>${new Date().toLocaleString()}</i>`;
 
-      await this.bot.sendMessage(this.chatId, message, { parse_mode: 'HTML' });
+      await this.bot.telegram.sendMessage(this.chatId, message, { parse_mode: 'HTML' });
     } catch (error) {
       logger.error('Failed to send execution notification', {
         error: error instanceof Error ? error.message : String(error),
@@ -356,7 +278,7 @@ ${emoji} <b>Trade Execution ${status}</b>
     }
   }
 
-  async sendSummary(summary: {
+  private async sendSummaryMessage(ctx: Context, summary: {
     totalTrades: number;
     processedTrades: number;
     copiedTrades: number;
@@ -366,13 +288,10 @@ ${emoji} <b>Trade Execution ${status}</b>
     openPositions: number;
     closedPositions: number;
   }): Promise<void> {
-    if (!this.enabled || !this.bot) return;
-
-    try {
-      const pnlEmoji = summary.totalPnL >= 0 ? '📈' : '📉';
-      const pnlColor = summary.totalPnL >= 0 ? '+' : '';
-      
-      let message = `
+    const pnlEmoji = summary.totalPnL >= 0 ? '📈' : '📉';
+    const pnlColor = summary.totalPnL >= 0 ? '+' : '';
+    
+    let message = `
 📊 <b>Portfolio Summary</b>
 
 <b>📈 Trading Activity</b>
@@ -385,32 +304,23 @@ ${emoji} <b>Trade Execution ${status}</b>
 • Open: ${summary.openPositions}
 • Closed: ${summary.closedPositions}
 • Total PnL: ${pnlEmoji} ${pnlColor}$${summary.totalPnL.toFixed(2)}
-      `.trim();
+    `.trim();
 
-      if (summary.positions.length > 0) {
-        message += '\n\n<b>📋 Top Positions:</b>';
-        const topPositions = summary.positions
-          .sort((a, b) => (b.pnl || 0) - (a.pnl || 0))
-          .slice(0, 5);
+    if (summary.positions.length > 0) {
+      message += '\n\n<b>📋 Top Positions:</b>';
+      const topPositions = summary.positions
+        .sort((a, b) => (b.pnl || 0) - (a.pnl || 0))
+        .slice(0, 5);
 
-        topPositions.forEach(pos => {
-          const posEmoji = (pos.pnl || 0) >= 0 ? '📈' : '📉';
-          const posSign = (pos.pnl || 0) >= 0 ? '+' : '';
-          message += `\n• ${pos.outcome} ${pos.side} ${pos.size.toFixed(1)} @ $${pos.entryPrice.toFixed(3)} ${posEmoji} ${posSign}$${(pos.pnl || 0).toFixed(2)}`;
-        });
-      }
-
-      message += `
-
-<i>${new Date().toLocaleString()}</i>`;
-
-      await this.bot.sendMessage(this.chatId, message, { parse_mode: 'HTML' });
-      logger.info('Summary sent to Telegram');
-    } catch (error) {
-      logger.error('Failed to send summary', {
-        error: error instanceof Error ? error.message : String(error),
+      topPositions.forEach(pos => {
+        const posEmoji = (pos.pnl || 0) >= 0 ? '📈' : '📉';
+        const posSign = (pos.pnl || 0) >= 0 ? '+' : '';
+        message += `\n• ${pos.outcome} ${pos.side} ${pos.size.toFixed(1)} @ $${pos.entryPrice.toFixed(3)} ${posEmoji} ${posSign}$${(pos.pnl || 0).toFixed(2)}`;
       });
     }
+
+    message += `\n\n<i>${new Date().toLocaleString()}</i>`;
+    await ctx.replyWithHTML(message);
   }
 
   async sendStartupMessage(mode: string): Promise<void> {
@@ -420,7 +330,7 @@ ${emoji} <b>Trade Execution ${status}</b>
     }
 
     try {
-      // Wait for polling to fully initialize and clear any conflicts
+      // Wait for bot to fully initialize
       await new Promise(resolve => setTimeout(resolve, 2000));
       
       const message = `
@@ -435,7 +345,7 @@ Try: /summary or /help
 <i>${new Date().toLocaleString()}</i>
       `.trim();
 
-      await this.bot.sendMessage(this.chatId, message, { parse_mode: 'HTML' });
+      await this.bot.telegram.sendMessage(this.chatId, message, { parse_mode: 'HTML' });
       logger.info('Startup message sent to Telegram');
     } catch (error) {
       logger.error('Failed to send startup message', {
@@ -443,26 +353,6 @@ Try: /summary or /help
       });
     }
   }
-
-  /**
-   * Check if bot is healthy and responding
-   */
-  async healthCheck(): Promise<{ healthy: boolean; error?: string }> {
-    if (!this.enabled || !this.bot) {
-      return { healthy: false, error: 'Bot not enabled' };
-    }
-
-    try {
-      await this.bot.getMe();
-      return { healthy: true };
-    } catch (error) {
-      return {
-        healthy: false,
-        error: error instanceof Error ? error.message : String(error),
-      };
-    }
-  }
-
   private formatChecks(validation: ValidationResult): string {
     const checks = [];
     
@@ -492,8 +382,8 @@ Try: /summary or /help
   async stop(): Promise<void> {
     if (this.bot) {
       try {
-        await this.bot.stopPolling();
-        logger.info('Telegram bot polling stopped');
+        this.bot.stop();
+        logger.info('Telegram bot stopped');
       } catch (error) {
         logger.error('Error stopping Telegram bot', {
           error: error instanceof Error ? error.message : String(error),
@@ -502,10 +392,19 @@ Try: /summary or /help
     }
   }
 
-  /**
-   * Check if the bot is ready to receive commands
-   */
-  isReady(): boolean {
-    return this.enabled && this.bot !== null;
+  async healthCheck(): Promise<{ healthy: boolean; error?: string }> {
+    if (!this.enabled || !this.bot) {
+      return { healthy: false, error: 'Bot not enabled' };
+    }
+
+    try {
+      await this.bot.telegram.getMe();
+      return { healthy: true };
+    } catch (error) {
+      return {
+        healthy: false,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
   }
 }

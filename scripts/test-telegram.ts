@@ -1,7 +1,7 @@
 #!/usr/bin/env ts-node
 
 import * as dotenv from 'dotenv';
-import TelegramBot from 'node-telegram-bot-api';
+import { Telegraf } from 'telegraf';
 
 dotenv.config();
 
@@ -17,54 +17,42 @@ async function testTelegramBot() {
   console.log('🔄 Testing Telegram bot connection...\n');
   
   try {
-    // Create bot instance
-    const bot = new TelegramBot(botToken!, { polling: false });
+    // Create Telegraf bot instance
+    const bot = new Telegraf(botToken!);
     
     // Test 1: Get bot info
     console.log('1️⃣  Getting bot info...');
-    const me = await bot.getMe();
+    const me = await bot.telegram.getMe();
     console.log(`   ✅ Bot: @${me.username} (${me.first_name})\n`);
     
-    // Test 2: Delete any existing webhook
-    console.log('2️⃣  Deleting webhook...');
-    await bot.deleteWebHook();
-    console.log('   ✅ Webhook deleted\n');
-    
-    // Test 3: Start polling
-    console.log('3️⃣  Starting polling...');
-    await bot.startPolling({ restart: true });
-    console.log('   ✅ Polling started\n');
-    
-    // Test 4: Send test message
-    console.log('4️⃣  Sending test message...');
-    await bot.sendMessage(chatId!, '🧪 Test message - Telegram bot is working!\n\nTry sending: /start', {
-      parse_mode: 'HTML',
-    });
-    console.log('   ✅ Message sent\n');
-    
-    // Test 5: Set up test command
-    console.log('5️⃣  Setting up /test command...');
-    bot.onText(/\/test/, async (msg) => {
-      if (msg.chat.id.toString() === chatId) {
-        await bot.sendMessage(chatId!, '✅ /test command working!', { parse_mode: 'HTML' });
+    // Test 2: Set up test command
+    console.log('2️⃣  Setting up /test command...');
+    bot.command('test', async (ctx) => {
+      if (ctx.chat?.id.toString() === chatId) {
+        await ctx.reply('✅ /test command working!');
         console.log('   ✅ /test command received and responded');
       }
     });
     console.log('   ✅ Command handler set up\n');
     
+    // Test 3: Send test message
+    console.log('3️⃣  Sending test message...');
+    await bot.telegram.sendMessage(chatId!, '🧪 Test message - Telegram bot is working!\n\nTry sending: /test');
+    console.log('   ✅ Message sent\n');
+    
+    // Test 4: Launch bot with dropPendingUpdates
+    console.log('4️⃣  Launching bot...');
+    await bot.launch({ dropPendingUpdates: true });
+    console.log('   ✅ Bot launched\n');
+    
     console.log('✅ All tests passed!');
     console.log('\n📱 Try sending /test to your bot in Telegram\n');
     console.log('Press Ctrl+C to stop...\n');
     
-    // Handle polling errors
-    bot.on('polling_error', (error) => {
-      console.error('❌ Polling error:', error.message);
-    });
-    
-    // Keep process alive
-    process.on('SIGINT', async () => {
+    // Enable graceful stop
+    process.once('SIGINT', () => {
       console.log('\n\n🛑 Stopping bot...');
-      await bot.stopPolling();
+      bot.stop();
       console.log('✅ Bot stopped');
       process.exit(0);
     });
