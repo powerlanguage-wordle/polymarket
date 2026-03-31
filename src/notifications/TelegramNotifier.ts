@@ -1,4 +1,5 @@
 import { Telegraf, Context } from 'telegraf';
+import type { Express } from 'express';
 import { createLogger } from '../utils/logger';
 import type { Trade, ValidationResult, ExecutionResult, Position } from '../types';
 
@@ -22,8 +23,9 @@ export class TelegramNotifier {
   private chatId: string = '';
   private enabled: boolean = false;
   private summaryProvider: SummaryProvider | null = null;
+  private expressApp: Express | null = null;
 
-  constructor(botToken?: string, chatId?: string) {
+  constructor(botToken?: string, chatId?: string, expressApp?: Express) {
     if (!botToken || !chatId) {
       console.log('   ℹ️  Telegram notifications disabled (no credentials)');
       logger.info('Telegram notifications disabled - no credentials provided');
@@ -32,6 +34,7 @@ export class TelegramNotifier {
 
     this.chatId = chatId;
     this.bot = new Telegraf(botToken);
+    this.expressApp = expressApp || null;
     this.setupCommands();
     
     // Start webhook in background
@@ -49,22 +52,32 @@ export class TelegramNotifier {
       console.log('   🔄 Starting Telegram webhook...');
       
       const webhookDomain = process.env.TELEGRAM_WEBHOOK_DOMAIN;
-      const webhookPort = parseInt(process.env.TELEGRAM_WEBHOOK_PORT || '8443');
+      const webhookPath = process.env.TELEGRAM_WEBHOOK_PATH || '/telegram/webhook';
       
       if (!webhookDomain) {
         logger.warn('TELEGRAM_WEBHOOK_DOMAIN not set, using polling mode');
         console.log('   ⚠️  No webhook domain, using polling (set TELEGRAM_WEBHOOK_DOMAIN for webhook)');
         await this.bot.launch();
+      } else if (this.expressApp) {
+        // Use shared Express app (same port as API server)
+        const secretPath = `${webhookPath}/${Math.random().toString(36).substring(7)}`;
+        await this.bot.telegram.setWebhook(`${webhookDomain}${secretPath}`);
+        this.expressApp.use(this.bot.webhookCallback(secretPath));
+        this.enabled = true;
+        console.log(`   ✅ Telegram webhook registered on shared server: ${secretPath}`);
+        logger.info('Telegram bot webhook configured on shared server');
+        return; // Skip the enabled = true below
       } else {
-        // Use webhook mode
+        // Use standalone webhook mode
+        const webhookPort = parseInt(process.env.TELEGRAM_WEBHOOK_PORT || '8443');
         await this.bot.launch({
           webhook: {
             domain: webhookDomain,
             port: webhookPort,
-            hookPath: '/telegram/webhook',
+            hookPath: webhookPath,
           },
         });
-        console.log(`   ✅ Telegram webhook ready on ${webhookDomain}:${webhookPort}`);
+        console.log(`   ✅ Telegram webhook ready on ${webhookDomain}:${webhookPort}${webhookPath}`);
       }
       
       this.enabled = true;

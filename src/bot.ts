@@ -68,10 +68,14 @@ class PolymarketCopyBot implements SummaryProvider {
       config.polymarket.clobApiUrl
     );
     
-    // Initialize Telegram notifier
+    // Initialize Telegram notifier with shared Express app
     const telegramToken = process.env.TELEGRAM_BOT_TOKEN;
     const telegramChatId = process.env.TELEGRAM_CHAT_ID;
-    this.telegramNotifier = new TelegramNotifier(telegramToken, telegramChatId);
+    this.telegramNotifier = new TelegramNotifier(
+      telegramToken, 
+      telegramChatId,
+      this.statsServer.getApp()
+    );
 
     if (config.execution.mode === 'paper') {
       this.trader = new PaperTrader(this.db);

@@ -257,4 +257,8 @@ export class StatsServer {
       }
     });
   }
+
+  getApp(): Express {
+    return this.app;
+  }
 }
