@@ -65,6 +65,7 @@ export class DatabaseManager {
         CREATE TABLE IF NOT EXISTS positions (
           id TEXT PRIMARY KEY,
           market TEXT NOT NULL,
+          asset TEXT,
           outcome TEXT NOT NULL,
           side TEXT NOT NULL CHECK(side IN ('BUY', 'SELL')),
           size DOUBLE PRECISION NOT NULL,
@@ -78,6 +79,15 @@ export class DatabaseManager {
           created_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT,
           updated_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT
         );
+        
+        -- Add asset column to existing positions table if it doesn't exist
+        DO $$ 
+        BEGIN
+          IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                        WHERE table_name='positions' AND column_name='asset') THEN
+            ALTER TABLE positions ADD COLUMN asset TEXT;
+          END IF;
+        END $$;
 
         CREATE INDEX IF NOT EXISTS idx_positions_market ON positions(market);
         CREATE INDEX IF NOT EXISTS idx_positions_status ON positions(status);
@@ -157,12 +167,13 @@ export class DatabaseManager {
   async savePosition(position: Position): Promise<void> {
     await this.pool.query(
       `INSERT INTO positions (
-        id, market, outcome, side, size, entry_price, current_price, pnl,
+        id, market, asset, outcome, side, size, entry_price, current_price, pnl,
         status, opened_at, closed_at, original_trader
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
       [
         position.id,
         position.market,
+        position.asset,
         position.outcome,
         position.side,
         position.size,
@@ -213,7 +224,7 @@ export class DatabaseManager {
   async getOpenPositions(): Promise<Position[]> {
     const result = await this.pool.query<Position>(
       `SELECT 
-        id, market, outcome, side, size, entry_price as "entryPrice",
+        id, market, asset, outcome, side, size, entry_price as "entryPrice",
         current_price as "currentPrice", pnl, status, opened_at as "openedAt",
         closed_at as "closedAt", original_trader as "originalTrader"
       FROM positions 
@@ -227,7 +238,7 @@ export class DatabaseManager {
   async getPositionsByMarket(market: string): Promise<Position[]> {
     const result = await this.pool.query<Position>(
       `SELECT 
-        id, market, outcome, side, size, entry_price as "entryPrice",
+        id, market, asset, outcome, side, size, entry_price as "entryPrice",
         current_price as "currentPrice", pnl, status, opened_at as "openedAt",
         closed_at as "closedAt", original_trader as "originalTrader"
       FROM positions 

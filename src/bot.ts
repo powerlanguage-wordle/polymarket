@@ -62,7 +62,12 @@ class PolymarketCopyBot {
     this.positionManager = new PositionManager(this.db);
     this.tradeLogger = new TradeLogger(this.db);
     this.healthChecker = new HealthChecker();
-    this.statsServer = new StatsServer(this.db, this.riskManager.getCapitalCalculator());
+    this.statsServer = new StatsServer(
+      this.db, 
+      this.riskManager.getCapitalCalculator(),
+      3001,
+      config.polymarket.clobApiUrl
+    );
     
     // Initialize Telegram notifier
     const telegramToken = process.env.TELEGRAM_BOT_TOKEN;

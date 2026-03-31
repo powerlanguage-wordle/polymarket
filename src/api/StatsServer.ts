@@ -14,12 +14,14 @@ export class StatsServer {
   private capitalCalculator: CapitalCalculator;
   private port: number;
   private server: any;
+  private clobApiUrl: string;
 
-  constructor(db: DatabaseManager, capitalCalculator: CapitalCalculator, port: number = 3001) {
+  constructor(db: DatabaseManager, capitalCalculator: CapitalCalculator, port: number = 3001, clobApiUrl: string = 'https://clob.polymarket.com') {
     this.app = express();
     this.db = db;
     this.capitalCalculator = capitalCalculator;
     this.port = port;
+    this.clobApiUrl = clobApiUrl;
     
     this.setupMiddleware();
     this.setupRoutes();
@@ -35,6 +37,73 @@ export class StatsServer {
     this.app.use(express.static(distPath));
   }
 
+  /**
+   * Fetch current price for a token from Polymarket
+   */
+  private async fetchCurrentPrice(tokenId: string): Promise<number | null> {
+    try {
+      const url = `${this.clobApiUrl}/midpoint?token_id=${tokenId}`;
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      if (!response.ok) {
+        logger.warn('Failed to fetch price', { tokenId, status: response.status });
+        return null;
+      }
+
+      const data = await response.json() as any;
+      const midpoint = parseFloat(data.mid);
+
+      if (isNaN(midpoint)) {
+        return null;
+      }
+
+      return midpoint;
+    } catch (error) {
+      logger.error('Error fetching current price', {
+        tokenId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return null;
+    }
+  }
+
+  /**
+   * Enrich positions with current prices and calculated PnL
+   */
+  private async enrichPositionsWithCurrentPrices(positions: Position[]): Promise<Position[]> {
+    // Fetch current prices for all positions in parallel
+    const pricePromises = positions.map(async (pos) => {
+      if (!pos.asset) {
+        // If no asset/token ID, can't fetch price
+        return { ...pos, currentPrice: pos.entryPrice };
+      }
+
+      const currentPrice = await this.fetchCurrentPrice(pos.asset);
+      
+      if (currentPrice === null) {
+        // If price fetch fails, use entry price as fallback
+        return { ...pos, currentPrice: pos.entryPrice };
+      }
+
+      // Calculate PnL based on current price
+      const priceDiff = currentPrice - pos.entryPrice;
+      const pnl = pos.side === 'BUY' 
+        ? priceDiff * pos.size 
+        : -priceDiff * pos.size;
+
+      return {
+        ...pos,
+        currentPrice,
+        pnl,
+      };
+    });
+
+    return Promise.all(pricePromises);
+  }
+
   private setupRoutes(): void {
     // Health check endpoint
     this.app.get('/api/health', (_req: Request, res: Response) => {
@@ -46,11 +115,14 @@ export class StatsServer {
       try {
         const positions = await this.db.getOpenPositions();
         
-        const totalValue = positions.reduce((sum, pos) => {
+        // Enrich with current prices
+        const enrichedPositions = await this.enrichPositionsWithCurrentPrices(positions);
+        
+        const totalValue = enrichedPositions.reduce((sum, pos) => {
           return sum + pos.size * pos.entryPrice;
         }, 0);
 
-        const totalPnl = positions.reduce((sum, pos) => {
+        const totalPnl = enrichedPositions.reduce((sum, pos) => {
           return sum + (pos.pnl || 0);
         }, 0);
 
@@ -77,8 +149,11 @@ export class StatsServer {
       try {
         const positions = await this.db.getOpenPositions();
         
+        // Enrich with current prices
+        const enrichedPositions = await this.enrichPositionsWithCurrentPrices(positions);
+        
         // Format positions for UI
-        const formattedPositions = positions.map((pos: Position) => ({
+        const formattedPositions = enrichedPositions.map((pos: Position) => ({
           id: pos.id,
           market: pos.market,
           outcome: pos.outcome,

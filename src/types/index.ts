@@ -14,6 +14,7 @@ export interface Trade {
 export interface Position {
   id: string;
   market: string;
+  asset?: string;
   outcome: string;
   side: 'BUY' | 'SELL';
   size: number;

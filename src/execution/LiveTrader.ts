@@ -42,6 +42,7 @@ export class LiveTrader {
           const position: Position = {
             id: positionId,
             market: trade.market,
+            asset: trade.asset,
             outcome: trade.outcome,
             side: trade.side,
             size: positionSize,
